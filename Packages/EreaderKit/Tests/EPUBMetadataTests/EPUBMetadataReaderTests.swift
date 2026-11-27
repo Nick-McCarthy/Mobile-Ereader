@@ -262,7 +262,10 @@ struct EPUBMetadataReaderTests {
 
     @Test("Entry-count and entry-size limits are enforced")
     func limits() async throws {
-        let url = try await EPUBFixture.book(package: EPUBFixture.package(metadata: "<dc:title>Book</dc:title>"))
+        // The container is ~250 bytes; the padded package document is well over the 400-byte limit below.
+        let padding = String(repeating: "x", count: 1000)
+        let package = EPUBFixture.package(metadata: "<dc:description>\(padding)</dc:description>")
+        let url = try await EPUBFixture.book(package: package)
         defer { EPUBFixture.cleanUp(url) }
 
         var fewEntries = EPUBLimits()
