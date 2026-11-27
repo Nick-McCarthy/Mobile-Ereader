@@ -15,12 +15,13 @@ struct AppDatabaseTests {
 
     @Test("All migrations run and every table exists")
     func migrationsCreateSchema() throws {
-        try database.writer.read { db in
-            #expect(try AppDatabase.migrator.hasCompletedMigrations(db))
-            for table in expectedTables {
-                #expect(try db.tableExists(table), "missing table \(table)")
-            }
+        let (completed, missingTables) = try database.writer.read { db in
+            let completed = try AppDatabase.migrator.hasCompletedMigrations(db)
+            let missing = try expectedTables.filter { try !db.tableExists($0) }
+            return (completed, missing)
         }
+        #expect(completed)
+        #expect(missingTables.isEmpty, "missing tables: \(missingTables)")
     }
 
     @Test("Opening an on-disk database twice keeps the schema")
