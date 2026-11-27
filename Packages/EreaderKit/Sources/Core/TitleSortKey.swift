@@ -6,10 +6,8 @@ public enum TitleSortKey {
     private static let leadingArticles = ["the ", "a ", "an "]
 
     public static func make(from title: String) -> String {
-        let folded = title
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
-            .lowercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let unaccented = title.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+        let folded = unaccented.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         for article in leadingArticles where folded.hasPrefix(article) {
             let remainder = folded.dropFirst(article.count).trimmingCharacters(in: .whitespaces)
             if !remainder.isEmpty {
