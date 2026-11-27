@@ -32,7 +32,8 @@ fi
     || fail "$INFO must set ITSAppUsesNonExemptEncryption to false"
 
 # Data Protection default class.
-[ "$(plist_value "$ENTITLEMENTS" com.apple.developer.default-data-protection)" \
+# (plutil key paths treat "." as a separator, so read this dotted key with PlistBuddy.)
+[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.default-data-protection' "$ENTITLEMENTS" 2>/dev/null || true)" \
     = "NSFileProtectionCompleteUntilFirstUserAuthentication" ] \
     && pass "default Data Protection class" \
     || fail "$ENTITLEMENTS must set default-data-protection to NSFileProtectionCompleteUntilFirstUserAuthentication"
