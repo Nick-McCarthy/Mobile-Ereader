@@ -39,6 +39,9 @@ struct MarkupElement: Sendable {
 enum Markup {
     /// Parses untrusted XML. External entities are never resolved, entity declarations are refused outright
     /// (package documents never need them, and they enable expansion attacks), and nesting is capped.
+    ///
+    /// The delegate aborts on any entity declaration, whatever the document's encoding. The byte search is
+    /// only a fast path for UTF-8: it misses UTF-16 documents (finding F-B2).
     static func parse(_ data: Data, maxDepth: Int) -> MarkupElement? {
         guard data.range(of: Data("<!ENTITY".utf8)) == nil else { return nil }
         let parser = XMLParser(data: data)
@@ -47,7 +50,9 @@ enum Markup {
         parser.shouldReportNamespacePrefixes = false
         let builder = TreeBuilder(maxDepth: maxDepth)
         parser.delegate = builder
-        guard parser.parse(), !builder.exceededDepth, builder.stack.count == 1 else { return nil }
+        guard parser.parse(), !builder.exceededDepth, !builder.declaredEntity, builder.stack.count == 1 else {
+            return nil
+        }
         return builder.stack.first
     }
 
@@ -60,6 +65,7 @@ enum Markup {
 private final class TreeBuilder: NSObject, XMLParserDelegate {
     var stack = [MarkupElement(name: "#document")]
     var exceededDepth = false
+    var declaredEntity = false
     private let maxDepth: Int
 
     init(maxDepth: Int) {
@@ -101,5 +107,35 @@ private final class TreeBuilder: NSObject, XMLParserDelegate {
 
     func parser(_ parser: XMLParser, foundCDATA block: Data) {
         stack[stack.count - 1].text += String(decoding: block, as: UTF8.self)
+    }
+
+    // Declarations come in the DTD, before the root element, so aborting here stops any expansion.
+
+    func parser(_ parser: XMLParser, foundInternalEntityDeclarationWithName name: String, value: String?) {
+        rejectEntity(parser)
+    }
+
+    func parser(
+        _ parser: XMLParser,
+        foundExternalEntityDeclarationWithName name: String,
+        publicID: String?,
+        systemID: String?
+    ) {
+        rejectEntity(parser)
+    }
+
+    func parser(
+        _ parser: XMLParser,
+        foundUnparsedEntityDeclarationWithName name: String,
+        publicID: String?,
+        systemID: String?,
+        notationName: String?
+    ) {
+        rejectEntity(parser)
+    }
+
+    private func rejectEntity(_ parser: XMLParser) {
+        declaredEntity = true
+        parser.abortParsing()
     }
 }
