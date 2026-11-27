@@ -8,6 +8,8 @@ A native **iPhone e-reader** (Swift + SwiftUI, iOS 17+) that stores EPUB files o
 Original requirements: [`Concept.md`](Concept.md) — the source of truth if anything below conflicts, **except** for decisions recorded here:
 
 - **Book sources:** Concept.md asks for Google Drive. The owner replaced it with a user choice of iCloud Drive, Dropbox, and OneDrive, because Google's restricted Drive scope needs a paid annual security assessment. Rationale in [`docs/REMOTE_SOURCES.md`](docs/REMOTE_SOURCES.md).
+- **Unlinking a source:** remote files are never touched. Not-downloaded books from that source are removed from the database. Downloaded books stay (detached), and if a detached book's file is later deleted, the book is removed from the database. Details in [`docs/REMOTE_SOURCES.md`](docs/REMOTE_SOURCES.md#unlinking--detached-books).
+- **Builds:** there is no local Mac. All builds, tests, and TestFlight uploads run on GitHub Actions macOS runners. Details in [`docs/CI_AND_BUILD.md`](docs/CI_AND_BUILD.md).
 
 ## Helper file index (`/docs`)
 
@@ -21,6 +23,7 @@ Original requirements: [`Concept.md`](Concept.md) — the source of truth if any
 | [`docs/UI_SPEC.md`](docs/UI_SPEC.md) | Building the Library, Collections, or Settings screens. |
 | [`docs/READER.md`](docs/READER.md) | Building the reader: Readium integration, gestures, Aa drawer, bookmarks, TOC, progress bar. |
 | [`docs/SECURITY_AND_APP_STORE.md`](docs/SECURITY_AND_APP_STORE.md) | Anything involving network, storage, credentials, untrusted input, privacy manifest, or release. |
+| [`docs/CI_AND_BUILD.md`](docs/CI_AND_BUILD.md) | Touching `project.yml`, GitHub Actions workflows, signing, or release; or wondering how to verify your change. |
 | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) | Writing any code: style, concurrency, testing, git/branch rules, definition of done. |
 
 ## Ground rules for agents
@@ -29,5 +32,5 @@ Original requirements: [`Concept.md`](Concept.md) — the source of truth if any
 3. **Security is a requirement, not a polish step.** Check [`SECURITY_AND_APP_STORE.md`](docs/SECURITY_AND_APP_STORE.md) before touching networking, storage, auth, or EPUB parsing. Tokens live only in the Keychain and are never logged; never add ATS exceptions; treat every EPUB as untrusted.
 4. **No new third-party dependencies** beyond Readium, GRDB, and ZIPFoundation without the owner's approval.
 5. **Never hit real Dropbox or Microsoft APIs in tests**; use `FakeRemoteSource` and sanitised recorded responses. Never commit secrets or copyrighted books.
-6. **Build requires macOS + Xcode.** If you're running on Windows/Linux, you can author code and docs but cannot run the app — say so rather than claiming something was tested.
+6. **CI is the only build machine.** Push your branch and use the GitHub Actions result (and its `.xcresult` artifact) as evidence. Never claim something was built or tested based on a local run you couldn't do. Edit `project.yml`, never the generated `.xcodeproj`.
 7. **Out-of-scope features** (see "Later" in the action plan) need owner sign-off first.

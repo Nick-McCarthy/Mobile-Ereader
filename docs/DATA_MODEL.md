@@ -9,7 +9,7 @@ SQLite via GRDB. All schema changes go through a **new, append-only** `DatabaseM
 |---|---|---|
 | `id` | TEXT PK | UUID string, app-generated |
 | `sourceKind` | TEXT | `local` \| `iCloud` \| `dropbox` \| `oneDrive` |
-| `sourceId` | TEXT NULL FK → `library_source.id` (ON DELETE SET NULL) | null for local imports |
+| `sourceId` | TEXT NULL FK → `library_source.id` (ON DELETE SET NULL) | null for local imports and for **detached** books (`sourceKind` ≠ `local` and `sourceId` is null: downloaded books whose source was unlinked; see [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#unlinking--detached-books)) |
 | `remoteId` | TEXT NULL | Dropbox `id:…`, Graph item id, or iCloud path relative to the root. UNIQUE together with `sourceId` |
 | `remotePath` | TEXT NULL | Human-readable path inside the synced root, for display/debug |
 | `remoteVersion` | TEXT NULL | Change token: Dropbox `content_hash`, OneDrive `cTag`, iCloud `<modDate>-<size>` |
@@ -73,6 +73,8 @@ One row per linked source. A user may link any combination of iCloud Drive, Drop
 | `lastSyncError` | TEXT NULL | Short, non-sensitive message |
 
 Tokens are **never** stored in this table. They live in the Keychain.
+
+**Unlink** deletes the `library_source` row inside one transaction that first deletes that source's not-downloaded books, then lets `ON DELETE SET NULL` detach the downloaded ones. Deleting a detached book's file deletes its `book` row (child tables cascade).
 
 ### `app_settings`
 Prefer `UserDefaults` (`@AppStorage`) for simple prefs: author display format, library view mode, sort key/direction, reader defaults. Reader **per-book** overrides, if added, go in a `book_reader_prefs` table.

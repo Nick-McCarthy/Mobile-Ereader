@@ -8,16 +8,17 @@ Each task has an id (`P<phase>.<n>`), a short description, and **Done when** acc
 
 ## Phase 0 — Prerequisites & project setup
 
-> ⚠️ iOS apps must be built with **Xcode on macOS**. The repo currently lives on a Windows machine; development needs a Mac (local, remote such as MacinCloud, or GitHub Actions `macos-latest` runners for CI builds). Docs and pure-Swift package logic can be authored anywhere, but nothing can be run on a simulator/device without macOS.
+> iOS apps must be built with Xcode on macOS. **Decision:** development happens on Windows and every build, test run, and TestFlight upload runs on **GitHub Actions macOS runners**. See [`CI_AND_BUILD.md`](CI_AND_BUILD.md). Because CI is the only build machine, **P0.6 comes before any app code**.
 
 - [ ] **P0.1 Accounts** — Apple Developer Program membership (needed for device testing beyond 7-day free provisioning, TestFlight, App Store); a **Dropbox** app in the App Console (scoped access, Full Dropbox, read-only scopes); a **Microsoft Entra** app registration (personal + work/school accounts, iOS public client). iCloud Drive needs no setup.
   *Done when:* bundle id (e.g. `com.<you>.ereader`) is registered and the Dropbox app key + Microsoft client id are stored in a local, git-ignored `Config/Secrets.xcconfig`.
 - [ ] **P0.2 Repo scaffolding** — `.gitignore` (Xcode, SPM, `Secrets.xcconfig`), `.swift-format`, `Config/Secrets.example.xcconfig`, README with build steps.
-- [ ] **P0.3 Xcode project** — SwiftUI app target `Ereader` (iOS 17+, iPhone only, portrait + landscape), local packages `Core`, `Persistence`, `EPUBMetadata`, `RemoteSources`, `BookStorage` per [`ARCHITECTURE.md`](ARCHITECTURE.md#module-layout). Swift 6 strict concurrency on. Optionally XcodeGen `project.yml`.
-  *Done when:* empty app with three tabs (Library / Collections / Settings) builds and runs; `swift test` passes in every package.
+- [ ] **P0.3 Xcode project** — SwiftUI app target `Ereader` (iOS 17+, iPhone only, portrait + landscape), local packages `Core`, `Persistence`, `EPUBMetadata`, `RemoteSources`, `BookStorage` per [`ARCHITECTURE.md`](ARCHITECTURE.md#module-layout). Swift 6 strict concurrency on. Defined in XcodeGen `project.yml` (required; `.xcodeproj` git-ignored).
+  *Done when:* empty app with three tabs (Library / Collections / Settings) builds in CI; `swift test` passes in every package; a UI-test screenshot of the app shows up in the CI artifact.
 - [ ] **P0.4 Dependencies** — add via SPM and pin: Readium Swift Toolkit, GRDB, ZIPFoundation. (No vendor auth SDKs; see [`ARCHITECTURE.md`](ARCHITECTURE.md#tech-stack-decision).)
 - [ ] **P0.5 Compliance skeleton** — `PrivacyInfo.xcprivacy`, `ITSAppUsesNonExemptEncryption = NO`, Data Protection entitlement, no ATS exceptions. See [`SECURITY_AND_APP_STORE.md`](SECURITY_AND_APP_STORE.md).
-- [ ] **P0.6 CI** — GitHub Actions on `macos-latest`: build + unit tests on every PR.
+- [ ] **P0.6 CI** — `ci.yml` per [`CI_AND_BUILD.md`](CI_AND_BUILD.md#githubworkflowsciyml-every-push-and-pull-request): pinned macOS image + Xcode, SPM cache, XcodeGen, lint, unit + UI tests on a simulator, `.xcresult` artifact. Repository variables for the public app ids.
+  *Done when:* a PR shows a green check and downloadable test results.
 
 ## Phase 1 — Local data foundation
 
@@ -46,8 +47,10 @@ The user can link any combination of the three. Spec: [`REMOTE_SOURCES.md`](REMO
   *Done when (P2.4–P2.6):* each adapter passes tests against sanitised recorded responses (or a temp directory for iCloud), including pagination, deletions, and auth expiry.
 - [ ] **P2.7 Sync engine** — provider-agnostic: diff (new / changed / missing), bounded-concurrency metadata fetch, respects `userEditedFields`, saves cursor only on success, progress stream, cancellation, idempotent resume, multiple sources.
   *Done when:* fake-source tests cover nested folders, pagination, cursor resume, deletions, version changes, rate-limit retry, and two sources linked at once.
-- [ ] **P2.8 Sources UI** — Settings *Book Sources* section (link / change folder / unlink per service), in-app folder browser for Dropbox and OneDrive, *Sync Now* with per-source progress, library banner, re-link prompts.
+- [ ] **P2.8 Sources UI** — Settings *Book Sources* section (link / change folder / unlink per service, with the outcome-stating unlink confirmation), in-app folder browser for Dropbox and OneDrive, *Sync Now* with per-source progress, library banner, re-link prompts.
 - [ ] **P2.9 On-demand download** — `DownloadManager` actor; tap-to-download with progress, cancel, atomic move, backup exclusion; *Remove Download*.
+- [ ] **P2.10 Unlink & detached books** — per [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#unlinking--detached-books): remote files untouched; not-downloaded books deleted; downloaded books detached (backup flag cleared); deleting a detached book's file deletes the book; launch-time integrity pass; re-attach on re-link.
+  *Done when:* tests cover unlink with mixed downloaded/not-downloaded books, cascade cleanup, Remove Download on a detached book, a missing detached file, and re-link re-attachment without duplicates.
 
 ## Phase 3 — Library UI
 
@@ -89,12 +92,12 @@ Spec: [`READER.md`](READER.md).
 - [ ] **P6.3 Offline behaviour** — downloaded books fully usable in airplane mode; clear messaging for undownloaded ones.
 - [ ] **P6.4 Provider approvals** — apply for Dropbox production status; complete Microsoft publisher verification. Both are free. See [`SECURITY_AND_APP_STORE.md`](SECURITY_AND_APP_STORE.md#provider-requirements).
 - [ ] **P6.5 App Store assets** — icon, screenshots (no copyrighted covers), privacy label, privacy policy page, reviewer notes + demo account.
-- [ ] **P6.6 TestFlight beta → App Store submission.**
+- [ ] **P6.6 Release workflow** — `release.yml` per [`CI_AND_BUILD.md`](CI_AND_BUILD.md#githubworkflowsreleaseyml-manual-workflow_dispatch-or-v-tags-on-main-only): signing secrets in a protected `release` environment, archive, export, upload to TestFlight. Set this up early (after Phase 1) so the owner can test on a real iPhone throughout.
+- [ ] **P6.7 TestFlight beta → App Store submission.**
 
 ## Later / nice-to-have (not in concept, don't build without asking)
 - Background sync (`BGAppRefreshTask`), multiple root folders per source, cross-source duplicate detection, built-in Google Drive (needs restricted-scope assessment), WebDAV / OPDS servers (Calibre-Web, Kavita), highlights & notes, iCloud sync of reading positions/bookmarks, per-book reader preferences, iPad layout, widgets, text-to-speech (Readium TTS).
 
 ## Open questions for the owner
 1. **Distribution:** personal use only, or public App Store? (Public needs Dropbox production approval and Microsoft publisher verification, both free.)
-2. **Unlink behaviour default:** keep a source's books (metadata/bookmarks) after unlinking it, or remove them?
-3. **Bundled fonts:** any specific fonts wanted beyond system serif/sans and an accessibility font?
+2. **Bundled fonts:** any specific fonts wanted beyond system serif/sans and an accessibility font?

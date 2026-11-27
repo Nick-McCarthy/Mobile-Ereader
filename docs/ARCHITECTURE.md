@@ -17,7 +17,7 @@ Requirements source: [`/Concept.md`](../Concept.md). Delivery order: [`ACTION_PL
 | EPUB metadata (sync-time) | **[ZIPFoundation](https://github.com/weichsel/ZIPFoundation)** for local and iCloud files, plus a small custom **remote ZIP reader** (HTTP range requests) for Dropbox and OneDrive | Lets us read title/author/date/cover *without* downloading whole books. See [`EPUB_METADATA.md`](EPUB_METADATA.md). |
 | XML parsing | Foundation `XMLParser` (or Readium's parser when the file is local) | No extra dependency. |
 | Image cache | Covers written to disk as downscaled JPEG/HEIC thumbnails; loaded via a small in-memory `NSCache` | Keeps the DB small, list/grid scrolling smooth. |
-| Project generation | **Xcode project** (optionally XcodeGen `project.yml` to keep the `.pbxproj` merge-friendly) | Agents can edit `project.yml` as text. |
+| Project generation | **XcodeGen** `project.yml` (required); `.xcodeproj` is generated and git-ignored | There is no local Mac, so the project must be editable as text and generated in CI. See [`CI_AND_BUILD.md`](CI_AND_BUILD.md). |
 | Tests | **Swift Testing** (`@Test`) for unit tests, **XCUITest** for UI flows | Built into Xcode 16+. |
 | Lint / format | `swift-format` (Apple) with repo config | Deterministic formatting for agent-written code. |
 
@@ -53,7 +53,8 @@ Mobile-Ereader/
 │  └─ BookStorage/               # On-device file management, downloads, file protection
 ├─ AppTests/ AppUITests/
 ├─ docs/                         # agent helper files (see /Agents.md)
-└─ project.yml                   # XcodeGen spec (if adopted)
+├─ .github/workflows/            # ci.yml, release.yml (see CI_AND_BUILD.md)
+└─ project.yml                   # XcodeGen spec (source of truth for the Xcode project)
 ```
 
 Dependency direction (no cycles): `App → {RemoteSources, BookStorage, Persistence, EPUBMetadata} → Core`. Readium is imported only by `App/Features/Reader` and (optionally) `EPUBMetadata` for local files.
@@ -70,7 +71,7 @@ Dependency direction (no cycles): `App → {RemoteSources, BookStorage, Persiste
 | Path | Contents | Protection | Backed up? |
 |---|---|---|---|
 | `Application Support/Database/library.sqlite` | All metadata | `completeUntilFirstUserAuthentication` (sync can run in background) | Yes |
-| `Application Support/Books/remote/<bookId>.epub` | Downloaded books from iCloud / Dropbox / OneDrive | `completeUntilFirstUserAuthentication` | **No** (`isExcludedFromBackup`; re-downloadable) |
+| `Application Support/Books/remote/<bookId>.epub` | Downloaded books from iCloud / Dropbox / OneDrive | `completeUntilFirstUserAuthentication` | **No** (`isExcludedFromBackup`; re-downloadable). **Yes** once *detached* (source unlinked) |
 | `Application Support/Books/local/<uuid>.epub` | Books imported from Files / share sheet | `completeUntilFirstUserAuthentication` | Yes (only copy) |
 | `Caches/Covers/<bookId>.jpg` | Cover thumbnails | default | No (regenerable from source) |
 

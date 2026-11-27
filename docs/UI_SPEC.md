@@ -19,10 +19,10 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
   - **Edit Details** → sheet: title, author, author stored format (First Last / Last, First), publication date, cover (choose from Photos / Files / reset to original). Saved fields go into `userEditedFields` so sync won't overwrite them. "Revert to file metadata" button.
   - **Add to Collection** → sheet with multi-select checklist of collections + "New Collection…".
   - **Add to Series** → sheet: pick series (or "New Series…") and optional number; "Remove from series".
-  - **Download** / **Remove Download** (depending on state).
+  - **Download** / **Remove Download** (depending on state). For a detached book (its source was unlinked) *Remove Download* is labelled **Remove Download & Book** and asks for confirmation, because the book can't be downloaded again.
   - **Remove from Library** (destructive, confirmation dialog; for local imports it deletes the file).
 - **Empty state:** explains how to add books, with buttons for *Connect iCloud Drive*, *Connect Dropbox*, *Connect OneDrive*, and *Import a File*.
-- **Source indicator:** a small source glyph (iCloud / Dropbox / OneDrive / device) in list rows and the Edit Details sheet. *Missing from source* books show a subtle badge.
+- **Source indicator:** a small source glyph (iCloud / Dropbox / OneDrive / device) in list rows and the Edit Details sheet. Detached books show the glyph crossed out, with "Not linked" in Edit Details. *Missing from source* books show a subtle badge.
 - **Sync banner:** slim progress banner at top while a sync is running.
 
 ## Collections tab
@@ -38,7 +38,7 @@ Grouped `Form`:
 - **Book Sources** (details in [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md))
   - One row per service: **iCloud Drive / Files**, **Dropbox**, **OneDrive**. Each shows *Not linked* or the account label + chosen folder path + last-synced time; a warning badge if it needs re-linking. The user can link any combination.
   - Tapping an unlinked row: iCloud → system folder picker; Dropbox / OneDrive → sign-in sheet (`ASWebAuthenticationSession`), then the in-app folder browser (*This Folder* / *Whole Dropbox/OneDrive*).
-  - Tapping a linked row → detail screen: *Change Folder*, *Sync This Source*, *Unlink* (asks whether to keep or remove that source's books from the library).
+  - Tapping a linked row → detail screen: *Change Folder*, *Sync This Source*, *Unlink*, with a confirmation that states the outcome: not-downloaded books from that source are removed from the library, downloaded books stay (detached), and the remote files aren't changed. See [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#unlinking--detached-books).
   - **Sync Now** button (syncs all linked sources) with live progress per source (found / processed / errors). *Cancel* while running.
   - Footer text: access is read-only, the app never modifies your files, and nothing is sent anywhere except the service you linked. iCloud footer notes that other installed file providers (such as Google Drive) also work through this option.
 - **Library**
@@ -47,5 +47,5 @@ Grouped `Form`:
   - *Create Series…* → name prompt.
   - *Manage Collections* / *Manage Series* → lists with rename/delete.
 - **Reading defaults** — default font, size, page colour (reader drawer edits per-session values; these are the starting defaults).
-- **Storage** — space used by downloads, *Remove All Downloads*.
+- **Storage** — space used by downloads, *Remove All Downloads* (its confirmation says how many detached books will also be removed from the library).
 - **About & Privacy** — version, privacy policy link, open-source licences (acknowledgements for Readium, GRDB, ZIPFoundation), *Delete All App Data*.

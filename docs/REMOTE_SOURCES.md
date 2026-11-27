@@ -44,7 +44,7 @@ protocol RemoteSource: Sendable {
   - Rejected: SwiftyDropbox and MSAL. They're fine but add large dependencies for features we don't need. Revisit MSAL only if work/school accounts with Conditional Access or broker (Authenticator app) sign-in become a requirement.
 - **Tokens:** store the access and refresh tokens in the **Keychain** (`kSecClassGenericPassword`, service `ereader.<kind>`, account = `library_source.id`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`). Never put them in UserDefaults, the database, files, or logs. Refresh proactively when within 5 minutes of expiry; on refresh failure, mark the source *needs re-link*.
 - **App credentials** (Dropbox app key, Microsoft client id) are not secrets for public clients, but keep them in `Config/Secrets.xcconfig` (git-ignored; a committed `Secrets.example.xcconfig` documents the keys). No client secrets ever ship in the app.
-- **Unlink:** revoke server-side where the API allows (Dropbox `POST /2/auth/token/revoke`; Microsoft has no per-token revoke for consumer apps, so delete the tokens locally and link to account.live.com/consent/Manage in the UI). Then delete the Keychain items and the `library_source` row, and (user's choice) remove or keep that source's books.
+- **Unlink:** revoke server-side where the API allows (Dropbox `POST /2/auth/token/revoke`; Microsoft has no per-token revoke for consumer apps, so delete the tokens locally and link to account.live.com/consent/Manage in the UI). Then delete the Keychain items and the `library_source` row, and apply the library rules in [Unlinking & detached books](#unlinking--detached-books).
 
 ### Dropbox specifics
 - App Console: **Scoped access**, **Full Dropbox** access type (so the user can choose any folder). Enable only the three read scopes above. Redirect URI: `db-<APP_KEY>://2/token` (register the URL scheme in `Info.plist`).
@@ -92,7 +92,18 @@ Triggered by **Sync Now** in Settings (and pull-to-refresh in the library; `BGAp
 - All endpoints are HTTPS (`*.dropboxapi.com`, `*.dropbox.com`, `graph.microsoft.com`, `login.microsoftonline.com`, OneDrive download hosts), so there are no ATS exceptions.
 
 ## Downloading a book (tap in library)
-`DownloadManager` actor: `RemoteSource.download(_:to:progress:)` → temp file → verify size → atomic move to `Books/remote/<bookId>.epub` → set file protection and `isExcludedFromBackup`. Show inline progress; tap again to cancel; open the reader when done. *Remove Download* frees space and keeps metadata, bookmarks and progress.
+`DownloadManager` actor: `RemoteSource.download(_:to:progress:)` → temp file → verify size → atomic move to `Books/remote/<bookId>.epub` → set file protection and `isExcludedFromBackup`. Show inline progress; tap again to cancel; open the reader when done. *Remove Download* frees space and keeps metadata, bookmarks and progress, **except for detached books** (see below), which are removed from the library entirely because they can no longer be re-downloaded.
+
+## Unlinking & detached books
+**Decision (owner):** unlinking never touches the user's remote files, and the library keeps only what is still readable.
+
+1. **Remote files are left alone.** The app is read-only. Unlinking revokes or deletes the tokens (or, for iCloud, forgets the folder bookmark) and nothing else. No remote file is moved, renamed, or deleted.
+2. **Not-downloaded books from that source are removed from the database** in one transaction when the source is unlinked: the `book` rows, and via cascade their bookmarks, reading position, collection and series memberships, FTS rows, and cover thumbnails. Collections and series themselves are kept even if they become empty.
+3. **Downloaded books stay** and become **detached**: `sourceId` is set to null, while `sourceKind`, `remoteId` and `remotePath` are kept. Because the local copy is now the only copy, clear `isExcludedFromBackup` on the file so it's included in device backups. Detached books open and behave like any other downloaded book.
+4. **If a detached book's file is deleted, the book is removed from the database.** This covers *Remove Download*, *Remove All Downloads*, and a file found missing or unreadable (checked when opening the book and during a lightweight launch-time integrity pass). The book's bookmarks, position, and memberships go with it. *Remove Download* on a detached book shows a confirmation: "This book is no longer linked to <service>. Removing the download will remove it from your library."
+5. **Re-linking the same service** later: before inserting new rows, sync matches detached books by `(sourceKind, remoteId)` and re-attaches them (sets `sourceId`, restores `isExcludedFromBackup`), so bookmarks and progress survive and no duplicates appear. For iCloud, where `remoteId` is a relative path, also require the same `remoteVersion` to re-attach.
+
+The confirmation dialog for *Unlink* states the outcome up front: "N books that aren't downloaded will be removed from your library. M downloaded books will stay. Your files in <service> won't be changed."
 
 ## Testing
 - Each adapter has a fake: `FakeRemoteSource` (configurable tree, pagination, cursors, deletions, 429s, auth expiry) for `SyncEngine` tests.

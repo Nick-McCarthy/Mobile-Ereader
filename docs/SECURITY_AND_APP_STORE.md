@@ -8,10 +8,11 @@ Concept requirement: *"the end result must be able to satisfy Apple security req
 - [ ] **OAuth flow** uses `ASWebAuthenticationSession` (system browser; the app never handles passwords), PKCE `S256`, and a random `state` parameter verified on callback. Never use an embedded `WKWebView` for sign-in.
 - [ ] **Security-scoped access** (iCloud / Files): always pair `startAccessingSecurityScopedResource()` with `stop…`; read via `NSFileCoordinator`; never write to the user's folder.
 - [ ] **Data Protection**: database and book files written with `FileProtectionType.completeUntilFirstUserAuthentication` (or `.complete` if background sync is never needed). Enable the *Data Protection* entitlement.
-- [ ] **Backup hygiene**: re-downloadable books in `Books/remote/` marked `isExcludedFromBackup`; caches in `Caches/`.
+- [ ] **Backup hygiene**: re-downloadable books in `Books/remote/` marked `isExcludedFromBackup`, and the flag cleared when a book becomes detached (its local copy is then the only one); caches in `Caches/`.
 - [ ] **Untrusted input**: EPUB parsing hardened (zip-slip, zip-bomb, XXE, size caps); see [`EPUB_METADATA.md`](EPUB_METADATA.md#security-of-untrusted-archives). Fuzz the metadata parser with malformed fixtures. Treat API JSON as untrusted too (no force-unwrapping decoded fields).
 - [ ] **WebView content**: book content cannot reach native code or the network; external links open only on explicit user tap.
 - [ ] **Logging**: use `os.Logger` with `privacy: .private` for titles, file names, paths, account labels. Never log URLs that contain tokens or pre-authenticated download links. No `print` in release builds.
+- [ ] **Unlink leaves remote data untouched**: no API call other than token revocation; tests assert the adapters issue no write requests.
 - [ ] **Least privilege**: read-only scopes only (Dropbox `files.metadata.read`, `files.content.read`, `account_info.read`; Microsoft `Files.Read`, `User.Read`, `offline_access`). No camera/mic/location/contacts/tracking entitlements. Photo access, if used for custom covers, via `PhotosPicker` (no permission prompt needed).
 - [ ] **No private APIs**, no dynamic code download/execution (Guideline 2.5.2).
 - [ ] **Dependencies** pinned via SPM `Package.resolved`; review release notes / advisories when bumping. Only the three planned third-party packages without discussion (Readium, GRDB, ZIPFoundation).
