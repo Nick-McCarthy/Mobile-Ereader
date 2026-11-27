@@ -10,9 +10,11 @@ enum FilesListing {
         .ubiquitousItemDownloadingStatusKey,
     ]
 
-    /// Every `.epub` under `start`, with ids relative to `root`, sorted by id. Hidden folders and packages
-    /// are skipped. iCloud placeholders (`.Name.epub.icloud`) are listed under their real name.
-    static func epubs(under start: URL, root: URL) throws -> [RemoteFile] {
+    /// Calls `visit` with every `.epub` under `start` as it is found, with ids relative to `root`. Hidden
+    /// folders and packages are skipped. iCloud placeholders (`.Name.epub.icloud`) are listed under their real
+    /// name, unless the real file is there too (it is listed instead). Throws `CancellationError` as soon as
+    /// the task is cancelled: it checks before every item, so a huge tree stops promptly.
+    static func epubs(under start: URL, root: URL, visit: (RemoteFile) throws -> Void) throws {
         guard
             let enumerator = FileManager.default.enumerator(
                 at: start,
@@ -22,8 +24,8 @@ enum FilesListing {
             )
         else { throw RemoteSourceError.notFound }
 
-        var files: [String: RemoteFile] = [:]
         for case let url as URL in enumerator {
+            try Task.checkCancellation()
             let values = try? url.resourceValues(forKeys: Set(keys))
             let name = url.lastPathComponent
             if values?.isDirectory == true {
@@ -32,26 +34,27 @@ enum FilesListing {
             }
             guard let realName = epubName(forFileNamed: name) else { continue }
             let realURL = url.deletingLastPathComponent().appendingPathComponent(realName)
+            let isPlaceholder = realName != name
+            // A downloaded file wins over a leftover placeholder with the same name.
+            if isPlaceholder, FileManager.default.fileExists(atPath: realURL.path) { continue }
             // Relative to the listed URL, which exists (a placeholder's real file may not).
             guard let listedId = relativePath(of: url, in: root) else { continue }
             let id = String(listedId.dropLast(name.count)) + realName
             // Prefer the real file's values; a placeholder's own size and date describe the placeholder.
             let real = try? realURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
-            let isPlaceholder = realName != name
             let size = real?.fileSize ?? (isPlaceholder ? nil : values?.fileSize)
             let modified = real?.contentModificationDate ?? values?.contentModificationDate
-            let file = RemoteFile(
-                remoteId: id,
-                displayPath: "/" + root.lastPathComponent + "/" + id,
-                name: realName,
-                size: size.map(Int64.init),
-                version: version(modified: modified, size: size),
-                modifiedAt: modified
+            try visit(
+                RemoteFile(
+                    remoteId: id,
+                    displayPath: "/" + root.lastPathComponent + "/" + id,
+                    name: realName,
+                    size: size.map(Int64.init),
+                    version: version(modified: modified, size: size),
+                    modifiedAt: modified
+                )
             )
-            // A downloaded file wins over a leftover placeholder with the same name.
-            if files[id] == nil || !isPlaceholder { files[id] = file }
         }
-        return files.values.sorted { $0.remoteId < $1.remoteId }
     }
 
     /// Visible sub-folders of `folder` (whose id is `id`), sorted as Files sorts them.

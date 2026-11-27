@@ -68,12 +68,8 @@ public actor FilesRemoteSource: RemoteSource {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let files = try await self.listEPUBs(under: root)
-                    continuation.yield(.reset)
-                    for file in files {
-                        try Task.checkCancellation()
-                        continuation.yield(.upsert(file))
-                    }
+                    let rootURL = try await self.resolveRoot()
+                    try await Self.walk(rootURL, from: root, into: continuation)
                     continuation.yield(.cursor(SyncCursor("files:\(Int(Date().timeIntervalSince1970))")))
                     continuation.finish()
                 } catch is CancellationError {
@@ -86,11 +82,19 @@ public actor FilesRemoteSource: RemoteSource {
         }
     }
 
-    private func listEPUBs(under folder: RemoteFolder) throws -> [RemoteFile] {
-        try withRoot { root in
+    /// Lists the folder off the actor, so a long walk doesn't hold up linking or downloads, yielding each
+    /// book as it is found (finding F-C1).
+    @concurrent
+    private static func walk(
+        _ root: URL,
+        from folder: RemoteFolder,
+        into continuation: AsyncThrowingStream<RemoteChange, any Error>.Continuation
+    ) async throws {
+        try withAccess(to: root) { root in
             let start = try FilesListing.url(for: folder.id, in: root)
             guard FilesListing.isDirectory(start) else { throw RemoteSourceError.notFound }
-            return try FilesListing.epubs(under: start, root: root)
+            continuation.yield(.reset)
+            try FilesListing.epubs(under: start, root: root) { _ = continuation.yield(.upsert($0)) }
         }
     }
 
@@ -162,7 +166,11 @@ public actor FilesRemoteSource: RemoteSource {
 
     /// Runs `body` with the picked folder's URL while its security scope is open.
     private func withRoot<T>(_ body: (URL) throws -> T) throws -> T {
-        let root = try resolveRoot()
+        try Self.withAccess(to: try resolveRoot(), body)
+    }
+
+    /// Runs `body` inside the folder's security scope. A folder that has gone away needs re-linking.
+    private static func withAccess<T>(to root: URL, _ body: (URL) throws -> T) throws -> T {
         let accessing = root.startAccessingSecurityScopedResource()
         defer { if accessing { root.stopAccessingSecurityScopedResource() } }
         guard FilesListing.isDirectory(root) else { throw RemoteSourceError.needsRelink }

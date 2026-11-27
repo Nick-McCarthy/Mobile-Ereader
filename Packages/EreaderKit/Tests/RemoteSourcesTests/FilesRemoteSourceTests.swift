@@ -73,7 +73,8 @@ struct FilesRemoteSourceTests {
             if case .upsert(let file) = change { return file }
             return nil
         }
-        #expect(files.map(\.remoteId) == ["Fiction/b.EPUB", "Fiction/c.epub", "Sci-Fi/Deep/f.epub", "a.epub"])
+        // Files stream in walk order, which the file system decides.
+        #expect(files.map(\.remoteId).sorted() == ["Fiction/b.EPUB", "Fiction/c.epub", "Sci-Fi/Deep/f.epub", "a.epub"])
 
         let rootName = tree.root.lastPathComponent
         let book = try #require(files.first { $0.remoteId == "a.epub" })
@@ -100,7 +101,7 @@ struct FilesRemoteSourceTests {
             if case .upsert(let file) = change { return file.remoteId }
             return nil
         }
-        #expect(ids == ["Fiction/b.EPUB", "Fiction/c.epub"])
+        #expect(ids.sorted() == ["Fiction/b.EPUB", "Fiction/c.epub"])
     }
 
     @Test("A downloaded file replaces its leftover placeholder")
@@ -117,6 +118,46 @@ struct FilesRemoteSourceTests {
         }
         #expect(matches.count == 1)
         #expect(matches.first?.size == 4)
+    }
+
+    @Test("The walk stops at the next item once its task is cancelled")
+    func walkChecksCancellationPerItem() async throws {
+        let tree = try TempTree()
+        defer { tree.remove() }
+        for index in 0..<200 {
+            try tree.write("Many/book\(index).epub", "x")
+        }
+        let root = tree.root
+        let task = Task { () -> Int in
+            var visited = 0
+            do {
+                try FilesListing.epubs(under: root, root: root) { _ in
+                    visited += 1
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }
+            } catch is CancellationError {
+                return visited
+            }
+            return -1
+        }
+        #expect(await task.value == 1, "the walk must throw at the first item after cancellation")
+    }
+
+    @Test("Stopping early ends a listing of a large tree")
+    func stoppingEarlyEndsTheStream() async throws {
+        let tree = try TempTree()
+        defer { tree.remove() }
+        for index in 0..<500 {
+            try tree.write("Many/book\(index).epub", "x")
+        }
+        let source = try await tree.linkedSource()
+
+        var upserts = 0
+        for try await change in source.enumerateEPUBs(under: .root, since: nil) {
+            if case .upsert = change { upserts += 1 }
+            if upserts == 3 { break }
+        }
+        #expect(upserts == 3)
     }
 
     @Test("The version changes when the file's content changes")
