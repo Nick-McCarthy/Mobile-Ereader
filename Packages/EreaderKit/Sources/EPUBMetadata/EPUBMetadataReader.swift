@@ -1,3 +1,4 @@
+import Core
 import Foundation
 
 /// Reads title, authors, date, series, and cover from an EPUB file. See docs/EPUB_METADATA.md#parsing-steps.
