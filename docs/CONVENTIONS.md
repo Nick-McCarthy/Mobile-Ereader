@@ -1,0 +1,32 @@
+# Coding, Testing & Workflow Conventions
+
+## Swift style
+- `swift-format` with the repo's `.swift-format` config; run before committing.
+- Swift 6 strict concurrency checking enabled (`-strict-concurrency=complete`). View models are `@MainActor @Observable final class`. Services that own mutable state are `actor`s.
+- Prefer value types for models (`struct Book: Codable, FetchableRecord, PersistableRecord`).
+- No force unwraps (`!`) or `try!` outside tests and static resources known at compile time.
+- Errors: typed `enum …Error: LocalizedError` per module; user-facing messages localised.
+- All user-facing strings in `Localizable.xcstrings` (English first). No hard-coded strings in views.
+- Accessibility: every icon-only `Button` gets an `accessibilityLabel`; test with the largest Dynamic Type size.
+- Keep views small: a view file > ~200 lines should be split into subviews.
+
+## Architecture rules
+- Feature code talks to protocols (`BookRepository`, `DriveClient`, `DownloadManaging`), never to GRDB/URLSession directly.
+- Only `App/Features/Reader` imports Readium navigator modules.
+- Pure logic (author formatting, sort keys, OPF parsing, sync diffing) lives in packages and must have unit tests.
+- New DB columns/tables = new migration + update [`DATA_MODEL.md`](DATA_MODEL.md) in the same change.
+
+## Testing
+- **Unit (Swift Testing):** `Core`, `EPUBMetadata`, `Persistence`, `DriveSync` — run with `swift test` inside each package or the Xcode test plan.
+- **Fixtures:** `Packages/EPUBMetadata/Tests/Fixtures/` — small public-domain or hand-made EPUBs covering EPUB 2, EPUB 3, missing metadata, odd covers, malformed zips. Never commit copyrighted books.
+- **UI (XCUITest):** library sort/view switching, long-press menu, reader chrome toggle vs. swipe, bookmarks, progress drag. Launch with `-UITestMode` to use an in-memory DB seeded with fixtures and a fake Drive client.
+- A task is not done until it builds with zero warnings and its tests pass:
+  ```
+  xcodebuild -scheme Ereader -destination 'platform=iOS Simulator,name=iPhone 16' test
+  ```
+
+## Git workflow
+- Branch per action-plan task: `feature/<phase>-<short-name>` (e.g. `feature/p2-drive-sync`).
+- Small commits with imperative messages; reference the action-plan task id (e.g. `P2.3: Add remote ZIP reader`).
+- Never commit secrets (`Config/Secrets.xcconfig`, `GoogleService-Info.plist` with real ids if treated as private), `.DS_Store`, `DerivedData`, or `xcuserdata`.
+- When finishing a task, tick it in [`ACTION_PLAN.md`](ACTION_PLAN.md).
