@@ -5,6 +5,7 @@ import Security
 /// Where a linked source's OAuth tokens live. The only real implementation is the Keychain:
 /// tokens never go in UserDefaults, the database, files, or logs (docs/SECURITY_AND_APP_STORE.md).
 public protocol TokenStore: Sendable {
+    /// Nil when there are none. Throws `KeychainError.undecodableItem` when the stored item can't be read.
     func tokens(forSource sourceId: String) throws -> OAuthTokens?
     func save(_ tokens: OAuthTokens, forSource sourceId: String) throws
     /// Deleting tokens that don't exist is not an error.
@@ -13,6 +14,8 @@ public protocol TokenStore: Sendable {
 
 public enum KeychainError: Error, Equatable, Sendable {
     case unexpectedStatus(OSStatus)
+    /// The item exists but isn't valid token JSON (damaged, or written by an incompatible version).
+    case undecodableItem
 }
 
 /// One generic-password item per linked source: service `ereader.<kind>`, account = `library_source.id`,
@@ -32,7 +35,10 @@ public struct KeychainTokenStore: TokenStore {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess, let data = result as? Data else { throw KeychainError.unexpectedStatus(status) }
-        return try JSONDecoder().decode(OAuthTokens.self, from: data)
+        guard let tokens = try? JSONDecoder().decode(OAuthTokens.self, from: data) else {
+            throw KeychainError.undecodableItem
+        }
+        return tokens
     }
 
     public func save(_ tokens: OAuthTokens, forSource sourceId: String) throws {

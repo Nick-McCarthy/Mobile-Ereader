@@ -65,6 +65,10 @@ public enum OAuthError: Error, Equatable, Sendable {
     case missingCode
     /// The user (or an administrator's policy) declined the requested permissions.
     case accessDenied
+    /// The provider redirected back with an error other than `access_denied`.
+    case authorizationFailed(error: String)
+    /// There is no refresh token, so the access token can't be renewed.
+    case noRefreshToken
     /// The token endpoint returned an error, such as `invalid_grant`.
     case tokenRequestFailed(status: Int, error: String?)
     /// The token endpoint's response couldn't be read.

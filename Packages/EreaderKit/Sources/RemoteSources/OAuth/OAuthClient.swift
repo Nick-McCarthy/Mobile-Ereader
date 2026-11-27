@@ -74,7 +74,7 @@ public struct OAuthClient: Sendable {
         guard let state = value("state"), state == request.state else { throw OAuthError.stateMismatch }
         if let error = value("error") {
             if error == "access_denied" { throw OAuthError.accessDenied }
-            throw OAuthError.tokenRequestFailed(status: 0, error: error)
+            throw OAuthError.authorizationFailed(error: error)
         }
         guard let code = value("code"), !code.isEmpty else { throw OAuthError.missingCode }
         return code
@@ -96,7 +96,7 @@ public struct OAuthClient: Sendable {
     /// `invalid_grant`) when the grant has been revoked or expired; the caller then asks the user to re-link.
     public func refresh(_ tokens: OAuthTokens) async throws -> OAuthTokens {
         guard let refreshToken = tokens.refreshToken else {
-            throw OAuthError.tokenRequestFailed(status: 0, error: "no_refresh_token")
+            throw OAuthError.noRefreshToken
         }
         let response = try await tokenRequest([
             "grant_type": "refresh_token",

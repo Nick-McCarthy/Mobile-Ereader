@@ -271,6 +271,43 @@ struct TokenProviderTests {
         #expect(try store.tokens(forSource: "S1") == nil)
     }
 
+    @Test("An unreadable Keychain item means re-link, and signing out still deletes it")
+    func undecodableItem() async throws {
+        let store = FlakyTokenStore()
+        store.undecodable = true
+        let client = OAuthClient(configuration: configuration, http: FakeHTTP([]), now: { fixedNow })
+        let provider = TokenProvider(client: client, store: store, sourceId: "S1")
+
+        await #expect(throws: RemoteSourceError.needsRelink) { _ = try await provider.validAccessToken() }
+        try await provider.signOut()
+        #expect(store.deleteCount == 1)
+    }
+
+    @Test("Fresh tokens survive a failed Keychain save and are saved on the next use")
+    func failedSaveAfterRefresh() async throws {
+        let store = FlakyTokenStore()
+        try store.save(OAuthTokens(accessToken: "a1", refreshToken: "r1", expiresAt: fixedNow), forSource: "S1")
+        store.failingSaves = 1
+        let http = FakeHTTP([.init(status: 200, body: tokenJSON(access: "a2", refresh: "r2"))])
+        let client = OAuthClient(configuration: configuration, http: http, now: { fixedNow })
+        let provider = TokenProvider(client: client, store: store, sourceId: "S1")
+
+        #expect(try await provider.validAccessToken() == "a2")
+        #expect(try store.tokens(forSource: "S1")?.refreshToken == "r1", "the save failed")
+
+        #expect(try await provider.validAccessToken() == "a2")
+        #expect(await http.requestCount == 1, "no second refresh: the unsaved tokens were used")
+        #expect(try store.tokens(forSource: "S1")?.refreshToken == "r2", "saved on the next use")
+    }
+
+    @Test("Without a refresh token, an expiring source needs re-linking")
+    func noRefreshToken() async throws {
+        let tokens = OAuthTokens(accessToken: "a1", refreshToken: nil, expiresAt: fixedNow)
+        let (provider, _, http) = try makeProvider(tokens: tokens, replies: [])
+        await #expect(throws: RemoteSourceError.needsRelink) { _ = try await provider.validAccessToken() }
+        #expect(await http.requestCount == 0)
+    }
+
     @Test("Tokens from a sign-in never reach UserDefaults")
     func notInUserDefaults() async throws {
         let (provider, store, _) = try makeProvider(tokens: nil, replies: [])
@@ -293,5 +330,49 @@ struct TokenProviderTests {
             query[kSecAttrAccessible as String] as? String == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String
         )
         #expect(query[kSecUseDataProtectionKeychain as String] as? Bool == true)
+    }
+}
+
+/// A token store that can fail on purpose: unreadable items and failing saves.
+private final class FlakyTokenStore: TokenStore, @unchecked Sendable {
+    // Guarded by `lock`.
+    private let lock = NSLock()
+    private var storage: [String: OAuthTokens] = [:]
+    private var _undecodable = false
+    private var _failingSaves = 0
+    private var _deleteCount = 0
+
+    var undecodable: Bool {
+        get { lock.withLock { _undecodable } }
+        set { lock.withLock { _undecodable = newValue } }
+    }
+    var failingSaves: Int {
+        get { lock.withLock { _failingSaves } }
+        set { lock.withLock { _failingSaves = newValue } }
+    }
+    var deleteCount: Int { lock.withLock { _deleteCount } }
+
+    func tokens(forSource sourceId: String) throws -> OAuthTokens? {
+        try lock.withLock {
+            if _undecodable { throw KeychainError.undecodableItem }
+            return storage[sourceId]
+        }
+    }
+
+    func save(_ tokens: OAuthTokens, forSource sourceId: String) throws {
+        try lock.withLock {
+            if _failingSaves > 0 {
+                _failingSaves -= 1
+                throw KeychainError.unexpectedStatus(errSecInteractionNotAllowed)
+            }
+            storage[sourceId] = tokens
+        }
+    }
+
+    func deleteTokens(forSource sourceId: String) throws {
+        lock.withLock {
+            _deleteCount += 1
+            storage[sourceId] = nil
+        }
     }
 }
