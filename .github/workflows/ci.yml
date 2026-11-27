@@ -74,6 +74,11 @@ jobs:
             mkdir -p build/screenshots
             xcrun xcresulttool export attachments \
               --path build/Ereader.xcresult --output-path build/screenshots
+            # Rename "<uuid>.png" to the attachment name, e.g. "Library tab.png".
+            cd build/screenshots
+            jq -r '.[].attachments[] | [.exportedFileName,
+                (.suggestedHumanReadableName | sub("_[0-9]+_[0-9A-Fa-f-]+\\.png$"; ".png"))] | @tsv' manifest.json |
+              while IFS=$'\t' read -r from to; do mv -- "$from" "$to"; done
           fi
 
       - name: Upload screenshots

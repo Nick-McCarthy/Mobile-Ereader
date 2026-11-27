@@ -14,12 +14,12 @@ Each task has an id (`P<phase>.<n>`), a short description, and **Done when** acc
 - [ ] **P0.1a Apple App ID** — *deferred until the first TestFlight build (P6.6).* Register the identifier above as an explicit App ID with the **Data Protection** capability (Complete Until First User Authentication). Needs a paid Apple Developer Program membership.
 - [ ] **P0.1b Dropbox app** — *deferred until P2.5.* App Console: scoped access, Full Dropbox, read-only scopes. Store the app key as the `DROPBOX_APP_KEY` repository variable.
 - [ ] **P0.1c Microsoft Entra app registration** — *deferred until P2.6.* Personal + work/school accounts, iOS public client, redirect `msauth.io.github.nick-mccarthy.ereader://auth`. Store the client id as the `MICROSOFT_CLIENT_ID` repository variable. iCloud Drive needs no setup.
-- [ ] **P0.2 Repo scaffolding** — `.gitignore` (Xcode, SPM, `Secrets.xcconfig`), `.swift-format`, `Config/Secrets.example.xcconfig`, README with build steps.
-- [ ] **P0.3 Xcode project** — SwiftUI app target `Ereader` (iOS 17+, iPhone only, portrait + landscape), local packages `Core`, `Persistence`, `EPUBMetadata`, `RemoteSources`, `BookStorage` per [`ARCHITECTURE.md`](ARCHITECTURE.md#module-layout). Swift 6 strict concurrency on. Defined in XcodeGen `project.yml` (required; `.xcodeproj` git-ignored).
+- [x] **P0.2 Repo scaffolding** — `.gitignore` (Xcode, SPM, `Secrets.xcconfig`), `.swift-format`, `Config/Secrets.example.xcconfig`, README with build steps.
+- [x] **P0.3 Xcode project** — SwiftUI app target `Ereader` (iOS 17+, iPhone only, portrait + landscape), local packages `Core`, `Persistence`, `EPUBMetadata`, `RemoteSources`, `BookStorage` per [`ARCHITECTURE.md`](ARCHITECTURE.md#module-layout). Swift 6 strict concurrency on. Defined in XcodeGen `project.yml` (required; `.xcodeproj` git-ignored).
   *Done when:* empty app with three tabs (Library / Collections / Settings) builds in CI; `swift test` passes in every package; a UI-test screenshot of the app shows up in the CI artifact.
 - [ ] **P0.4 Dependencies** — add via SPM and pin: Readium Swift Toolkit, GRDB, ZIPFoundation. (No vendor auth SDKs; see [`ARCHITECTURE.md`](ARCHITECTURE.md#tech-stack-decision).)
 - [ ] **P0.5 Compliance skeleton** — `PrivacyInfo.xcprivacy`, `ITSAppUsesNonExemptEncryption = NO`, Data Protection entitlement, no ATS exceptions. See [`SECURITY_AND_APP_STORE.md`](SECURITY_AND_APP_STORE.md).
-- [ ] **P0.6 CI** — `ci.yml` per [`CI_AND_BUILD.md`](CI_AND_BUILD.md#githubworkflowsciyml-every-push-and-pull-request): pinned macOS image + Xcode, SPM cache, XcodeGen, lint, unit + UI tests on a simulator, `.xcresult` artifact. Repository variables for the public app ids.
+- [x] **P0.6 CI** — `ci.yml` per [`CI_AND_BUILD.md`](CI_AND_BUILD.md#githubworkflowsciyml-every-push-and-pull-request): pinned macOS image + Xcode, SPM cache, XcodeGen, lint, unit + UI tests on a simulator, `.xcresult` artifact. Repository variables for the public app ids.
   *Done when:* a PR shows a green check and downloadable test results.
 
 ## Phase 1 — Local data foundation
