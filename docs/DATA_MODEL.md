@@ -2,6 +2,8 @@
 
 SQLite via GRDB. All schema changes go through a **new, append-only** `DatabaseMigrator` migration — never edit a shipped migration.
 
+Implemented in `Packages/EreaderKit/Sources/Persistence`: `AppDatabase` (opening, configuration, Data Protection) and `Schema` (migrations; v1 = everything below). Enum-like text columns have `CHECK` constraints, foreign keys are enforced, and collection/series names are unique case-insensitively (`NOCASE`, ASCII only).
+
 ## Tables
 
 ### `book`
@@ -16,6 +18,7 @@ SQLite via GRDB. All schema changes go through a **new, append-only** `DatabaseM
 | `remoteModifiedAt` | DATETIME NULL | |
 | `fileSize` | INTEGER NULL | bytes |
 | `title` | TEXT NOT NULL | Effective title (user override if set, else parsed, else `"Unknown Title"`) |
+| `titleIsPlaceholder`, `authorIsPlaceholder` | BOOLEAN NOT NULL | True when the stored value is the placeholder, so it sorts last and can be localised |
 | `titleSort` | TEXT NOT NULL | Lower-cased, leading articles ("the", "a", "an") stripped |
 | `authorRaw` | TEXT NOT NULL | Exactly as parsed (or `"Unknown Author"`) |
 | `authorFileAs` | TEXT NULL | OPF `opf:file-as` / `refines … file-as` if present |
@@ -33,8 +36,12 @@ SQLite via GRDB. All schema changes go through a **new, append-only** `DatabaseM
 | `dateAdded`, `lastOpenedAt` | DATETIME | `lastOpenedAt` drives "Recently viewed" sort |
 | `progression` | REAL | 0…1 cached from last locator, for list display |
 
-### `book_fts` (FTS5, external-content on `book`)
-Columns: `title`, `authorRaw`, `authorDisplay` (both name orders so either search works), series names, collection names. Kept in sync with triggers. Use the `unicode61 remove_diacritics 2` tokenizer.
+### `book_fts` (FTS5)
+One row per book: `bookId` (UNINDEXED), `title`, `author` (`authorRaw` + `authorFileAs`), `series` (series name), `collections` (collection names). Tokenizer `unicode61 remove_diacritics 2`, so "garcia" matches "García".
+- It's a regular FTS5 table, not external-content, because it combines columns from several tables.
+- FTS5 matches tokens in any order, so "ursula le guin" finds "Le Guin, Ursula K." without storing both name orders.
+- Triggers on `book`, `series`, `series_book`, `collection`, and `collection_book` keep it current, including renames and cascaded deletes.
+- Build query patterns from user input with GRDB's `FTS5Pattern(matchingAllPrefixesIn:)`, never by string concatenation.
 
 ### `reading_position`
 `bookId` (PK, FK cascade) · `locatorJSON` (Readium `Locator` serialised) · `updatedAt`.
@@ -52,7 +59,7 @@ Columns: `title`, `authorRaw`, `authorDisplay` (both name orders so either searc
 `id` · `name` (UNIQUE, case-insensitive) · `createdAt`.
 
 ### `series_book`
-`seriesId` · `bookId` (UNIQUE — a book belongs to at most one series) · `position` (REAL, so 1.5 novellas work; NULL = unnumbered).
+`seriesId` · `bookId` (PRIMARY KEY, so a book belongs to at most one series) · `position` (REAL, so 1.5 novellas work; NULL = unnumbered).
 
 Series may also be pre-populated from EPUB metadata (`calibre:series` / `calibre:series_index`, or EPUB 3 `belongs-to-collection` + `collection-type="series"` + `group-position`).
 
