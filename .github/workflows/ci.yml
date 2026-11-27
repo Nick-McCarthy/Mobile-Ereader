@@ -49,15 +49,15 @@ jobs:
           path: |
             Packages/EreaderKit/.build
             build/SourcePackages
-          key: spm-xcode${{ env.XCODE_VERSION }}-${{ hashFiles('Packages/EreaderKit/Package.swift', 'Packages/EreaderKit/Package.resolved', 'project.yml', 'Config/Package.resolved') }}
+          key: spm-xcode${{ env.XCODE_VERSION }}-${{ hashFiles('Packages/EreaderKit/Package.swift', 'Packages/EreaderKit/Package.resolved', 'project.yml') }}
           restore-keys: spm-xcode${{ env.XCODE_VERSION }}-
 
-      # Pinning: Packages/EreaderKit/Package.resolved (swift test) and Config/Package.resolved (the app,
-      # copied into the generated project). When committed, builds may only use those exact versions.
+      # Pinning: Packages/EreaderKit/Package.resolved pins the whole graph, app included. Xcode reads and writes the
+      # local package's file for this project. When it's committed, builds may only use those exact versions.
       - name: Package tests
         run: |
           ARGS=()
-          if [ -f Packages/EreaderKit/Package.resolved ]; then
+          if git ls-files --error-unmatch Packages/EreaderKit/Package.resolved > /dev/null 2>&1; then
             ARGS+=(--force-resolved-versions)
           fi
           swift test --package-path Packages/EreaderKit "${ARGS[@]}"
@@ -75,34 +75,19 @@ jobs:
 
       - name: Resolve app packages
         run: |
-          RESOLVED=Ereader.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-          mkdir -p "$(dirname "$RESOLVED")"
           PKG_FLAGS=""
-          if [ -f Config/Package.resolved ]; then
-            cp Config/Package.resolved "$RESOLVED"
+          if git ls-files --error-unmatch Packages/EreaderKit/Package.resolved > /dev/null 2>&1; then
+            git checkout -- Packages/EreaderKit/Package.resolved   # undo any rewrite by swift test
             PKG_FLAGS="-onlyUsePackageVersionsFromResolvedFile -disableAutomaticPackageResolution"
           fi
           echo "PKG_FLAGS=$PKG_FLAGS" >> "$GITHUB_ENV"
           xcodebuild -resolvePackageDependencies -project Ereader.xcodeproj -scheme Ereader \
             -clonedSourcePackagesDirPath build/SourcePackages $PKG_FLAGS
-          # Collect both resolved files so they can be committed (bootstrap) or reviewed.
-          mkdir -p build/resolved/Config build/resolved/Packages/EreaderKit
-          if [ -f "$RESOLVED" ]; then
-            cp "$RESOLVED" build/resolved/Config/Package.resolved
-          else
-            # xcodebuild doesn't write the project's Package.resolved here, so build one from SwiftPM's state.
-            jq '{
-                pins: [.object.dependencies[]
-                  | select(.packageRef.kind == "remoteSourceControl")
-                  | {identity: .packageRef.identity, kind: "remoteSourceControl", location: .packageRef.location,
-                     state: {revision: .state.checkoutState.revision, version: .state.checkoutState.version}}]
-                  | sort_by(.identity),
-                version: 2
-              }' build/SourcePackages/workspace-state.json > build/resolved/Config/Package.resolved
-          fi
-          echo "Resolved app package versions:"
-          jq -r '.pins[] | "  \(.identity) \(.state.version // .state.revision)"' build/resolved/Config/Package.resolved
-          cp Packages/EreaderKit/Package.resolved build/resolved/Packages/EreaderKit/Package.resolved
+          echo "Resolved package versions:"
+          jq -r '.pins[] | "  \(.identity) \(.state.version // .state.revision)"' Packages/EreaderKit/Package.resolved
+          # Collect the resolved file so it can be committed (bootstrap) or reviewed.
+          mkdir -p build/resolved
+          cp Packages/EreaderKit/Package.resolved build/resolved/Package.resolved
 
       - name: Upload resolved package versions
         if: always()
@@ -155,12 +140,13 @@ jobs:
           path: build/Ereader.xcresult
           if-no-files-found: ignore
 
-      - name: Require committed Package.resolved files
+      - name: Require committed Package.resolved
         run: |
           missing=0
-          for f in Packages/EreaderKit/Package.resolved Config/Package.resolved; do
-            if [ ! -f "$f" ]; then
-              echo "::error file=$f::$f is not committed. Download the package-resolved artifact from this run and commit it."
+          for f in Packages/EreaderKit/Package.resolved; do
+            # Check git, not the disk: swift test writes the package's file during the run.
+            if ! git ls-files --error-unmatch "$f" > /dev/null 2>&1; then
+              echo "::error file=$f::$f is not committed. Download the package-resolved artifact from this run and commit it as $f."
               missing=1
             fi
           done
