@@ -53,6 +53,23 @@ As implemented (P2.1, `RemoteSources/RemoteSource.swift`):
 - **App credentials** (Dropbox app key, Microsoft client id) are not secrets for public clients, but keep them in `Config/Secrets.xcconfig` (git-ignored; a committed `Secrets.example.xcconfig` documents the keys). No client secrets ever ship in the app.
 - **Unlink:** revoke server-side where the API allows (Dropbox `POST /2/auth/token/revoke`; Microsoft has no per-token revoke for consumer apps, so delete the tokens locally and link to account.live.com/consent/Manage in the UI). Then delete the Keychain items and the `library_source` row, and apply the library rules in [Unlinking & detached books](#unlinking--detached-books).
 
+### Implementation (P2.2, `RemoteSources/OAuth`)
+- `OAuthConfiguration`: authorize / token URLs, client id, redirect URI (its scheme is the callback scheme), scopes, extra authorise parameters, and revocation (`.none` or `.bearerPost(url)`).
+- `OAuthClient.signIn(using:)`:
+  1. builds the URL with a fresh 16-byte `state` and a PKCE pair (32 random bytes → 43-character verifier, `S256` challenge)
+  2. opens it with a `WebAuthenticator`
+  3. checks the callback (the `state` must match before anything else is read, including `error`)
+  4. exchanges the code with the verifier
+  `refresh` keeps the old refresh token if the response omits one. `revoke` posts the bearer token when configured.
+- `SystemWebAuthenticator` (iOS) wraps `ASWebAuthenticationSession` with `prefersEphemeralWebBrowserSession = true`. Closing the sheet throws `RemoteSourceError.cancelled`.
+- `TokenProvider` (actor, one per linked source):
+  - `validAccessToken()` refreshes when fewer than 5 minutes remain, and concurrent callers share one refresh.
+  - `forceRefresh()` is for a `401`.
+  - `signOut()` revokes on a best-effort basis, then deletes the tokens.
+  - A refresh rejected with 400 / 401 (or no refresh token) becomes `RemoteSourceError.needsRelink`. Network errors pass through so a retry can work.
+- `TokenStore` → `KeychainTokenStore`: generic password, service `ereader.<kind>`, account `library_source.id`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, data-protection keychain, value = JSON. `OAuthTokens` redacts itself in `description`. Tests use `InMemoryTokenStore` (RemoteSourcesTesting) and check the Keychain query attributes rather than the real Keychain, which unsigned `swift test` binaries can't use.
+- All HTTP goes through `HTTPClient` (`URLSession.ephemeralClient`: no cookies, cache, or stored credentials), so tests use recorded responses and never reach the network.
+
 ### Dropbox specifics
 - App Console: **Scoped access**, **Full Dropbox** access type (so the user can choose any folder). Enable only the three read scopes above. Redirect URI: `db-<APP_KEY>://2/token` (register the URL scheme in `Info.plist`).
 - Authorise: `https://www.dropbox.com/oauth2/authorize?client_id=…&response_type=code&code_challenge=…&code_challenge_method=S256&token_access_type=offline&redirect_uri=…`. Token: `POST https://api.dropboxapi.com/oauth2/token`.

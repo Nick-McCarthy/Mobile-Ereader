@@ -1,0 +1,297 @@
+import Foundation
+import RemoteSourcesTesting
+import Security
+import Testing
+
+@testable import RemoteSources
+
+// MARK: - Test doubles
+
+/// Answers requests from a queue and records what was sent. Never touches the network.
+private actor FakeHTTP: HTTPClient {
+    struct Reply {
+        var status: Int
+        var body: String
+    }
+
+    private var replies: [Reply]
+    private(set) var requests: [URLRequest] = []
+    private let delay: Duration
+
+    init(_ replies: [Reply], delay: Duration = .zero) {
+        self.replies = replies
+        self.delay = delay
+    }
+
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requests.append(request)
+        if delay > .zero { try await Task.sleep(for: delay) }
+        guard !replies.isEmpty else { throw URLError(.notConnectedToInternet) }
+        let reply = replies.removeFirst()
+        let url = request.url ?? URL(fileURLWithPath: "/")
+        let response = HTTPURLResponse(url: url, statusCode: reply.status, httpVersion: nil, headerFields: nil)
+        return (Data(reply.body.utf8), response ?? HTTPURLResponse())
+    }
+
+    var requestCount: Int { requests.count }
+
+    func formBody(at index: Int) -> [String: String] {
+        let body = String(decoding: requests[index].httpBody ?? Data(), as: UTF8.self)
+        var fields: [String: String] = [:]
+        for pair in body.split(separator: "&") {
+            let parts = pair.split(separator: "=", maxSplits: 1).map { String($0).removingPercentEncoding ?? "" }
+            if parts.count == 2 { fields[parts[0]] = parts[1] }
+        }
+        return fields
+    }
+}
+
+/// Returns a canned redirect, as if the user signed in.
+private struct FakeAuthenticator: WebAuthenticator {
+    var callback: @Sendable (URL) -> URL
+
+    func authenticate(url: URL, callbackScheme: String) async throws -> URL {
+        callback(url)
+    }
+}
+
+/// Test URLs are literals; an invalid one should fail loudly rather than be force-unwrapped.
+private func testURL(_ string: String) -> URL {
+    guard let url = URL(string: string) else { preconditionFailure("bad test URL \(string)") }
+    return url
+}
+
+private let fixedNow = Date(timeIntervalSince1970: 1_700_000_000)
+
+private let configuration = OAuthConfiguration(
+    authorizeURL: testURL("https://auth.example.com/authorize"),
+    tokenURL: testURL("https://auth.example.com/token"),
+    clientId: "client-123",
+    redirectURI: testURL("db-client-123://2/token"),
+    scopes: ["files.metadata.read", "files.content.read"],
+    extraAuthorizeParameters: ["token_access_type": "offline"],
+    revocation: .bearerPost(testURL("https://api.example.com/2/auth/token/revoke"))
+)
+
+private func tokenJSON(access: String, refresh: String? = nil, expiresIn: Int = 14_400) -> String {
+    let refreshField = refresh.map { #","refresh_token":"\#($0)""# } ?? ""
+    return #"{"access_token":"\#(access)","token_type":"bearer","expires_in":\#(expiresIn)\#(refreshField)}"#
+}
+
+private func query(_ url: URL) -> [String: String] {
+    let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+    return Dictionary(items.map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { first, _ in first })
+}
+
+// MARK: - Tests
+
+@Suite("OAuth with PKCE")
+struct OAuthTests {
+    @Test("PKCE matches the RFC 7636 example and generates fresh base64url verifiers")
+    func pkce() throws {
+        let example = PKCE(verifier: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
+        #expect(example.challenge == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+        #expect(example.method == "S256")
+
+        let first = try PKCE()
+        let second = try PKCE()
+        #expect(first.verifier.count == 43)
+        #expect(first.verifier != second.verifier)
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+        #expect(first.verifier.unicodeScalars.allSatisfy { allowed.contains($0) })
+    }
+
+    @Test("The authorisation URL carries the client, redirect, state, S256 challenge, scopes, and extras")
+    func authorizationURL() throws {
+        let client = OAuthClient(configuration: configuration, http: FakeHTTP([]))
+        let request = try client.makeAuthorizationRequest()
+        let items = query(request.url)
+
+        #expect(request.url.host() == "auth.example.com")
+        #expect(items["client_id"] == "client-123")
+        #expect(items["response_type"] == "code")
+        #expect(items["redirect_uri"] == "db-client-123://2/token")
+        #expect(items["state"] == request.state)
+        #expect(items["code_challenge"] == request.pkce.challenge)
+        #expect(items["code_challenge_method"] == "S256")
+        #expect(items["scope"] == "files.metadata.read files.content.read")
+        #expect(items["token_access_type"] == "offline")
+        #expect(items["code_verifier"] == nil, "the verifier must not appear in the browser URL")
+        #expect(try client.makeAuthorizationRequest().state != request.state)
+    }
+
+    @Test("Callbacks are rejected unless the state matches")
+    func callbackValidation() throws {
+        let client = OAuthClient(configuration: configuration, http: FakeHTTP([]))
+        let request = try client.makeAuthorizationRequest()
+        func callback(_ query: String) -> URL { testURL("db-client-123://2/token?\(query)") }
+
+        #expect(try client.authorizationCode(from: callback("code=abc&state=\(request.state)"), for: request) == "abc")
+        #expect(throws: OAuthError.stateMismatch) {
+            _ = try client.authorizationCode(from: callback("code=abc&state=forged"), for: request)
+        }
+        #expect(throws: OAuthError.stateMismatch) {
+            _ = try client.authorizationCode(from: callback("code=abc"), for: request)
+        }
+        #expect(throws: OAuthError.stateMismatch) {
+            _ = try client.authorizationCode(from: callback("error=access_denied&state=forged"), for: request)
+        }
+        #expect(throws: OAuthError.accessDenied) {
+            _ = try client.authorizationCode(from: callback("error=access_denied&state=\(request.state)"), for: request)
+        }
+        #expect(throws: OAuthError.missingCode) {
+            _ = try client.authorizationCode(from: callback("state=\(request.state)"), for: request)
+        }
+    }
+
+    @Test("Sign-in exchanges the code with the PKCE verifier and computes the expiry")
+    func signIn() async throws {
+        let http = FakeHTTP([.init(status: 200, body: tokenJSON(access: "access-1", refresh: "refresh-1"))])
+        let client = OAuthClient(configuration: configuration, http: http, now: { fixedNow })
+        let authenticator = FakeAuthenticator { url in
+            testURL("db-client-123://2/token?code=the-code&state=\(query(url)["state"] ?? "")")
+        }
+
+        let tokens = try await client.signIn(using: authenticator)
+        #expect(tokens == OAuthTokens(accessToken: "access-1", refreshToken: "refresh-1", expiresAt: fixedNow + 14_400))
+
+        let sent = await http.requests
+        #expect(sent.first?.url == configuration.tokenURL)
+        #expect(sent.first?.httpMethod == "POST")
+        let form = await http.formBody(at: 0)
+        #expect(form["grant_type"] == "authorization_code")
+        #expect(form["code"] == "the-code")
+        #expect(form["client_id"] == "client-123")
+        #expect(form["redirect_uri"] == "db-client-123://2/token")
+        #expect(form["code_verifier"]?.count == 43)
+        #expect(form["client_secret"] == nil, "public clients never send a secret")
+    }
+
+    @Test("Refresh keeps the old refresh token when the response omits it, and reports rejected grants")
+    func refresh() async throws {
+        let http = FakeHTTP([
+            .init(status: 200, body: tokenJSON(access: "access-2")),
+            .init(status: 400, body: #"{"error":"invalid_grant"}"#),
+        ])
+        let client = OAuthClient(configuration: configuration, http: http, now: { fixedNow })
+        let old = OAuthTokens(accessToken: "access-1", refreshToken: "refresh-1", expiresAt: fixedNow)
+
+        let fresh = try await client.refresh(old)
+        #expect(fresh.accessToken == "access-2")
+        #expect(fresh.refreshToken == "refresh-1")
+        #expect(await http.formBody(at: 0)["grant_type"] == "refresh_token")
+
+        await #expect(throws: OAuthError.tokenRequestFailed(status: 400, error: "invalid_grant")) {
+            _ = try await client.refresh(old)
+        }
+    }
+
+    @Test("Token descriptions are redacted")
+    func redaction() {
+        let tokens = OAuthTokens(accessToken: "secret-access", refreshToken: "secret-refresh", expiresAt: nil)
+        for text in [String(describing: tokens), String(reflecting: tokens), "\(tokens)"] {
+            #expect(!text.contains("secret"))
+        }
+    }
+}
+
+@Suite("Token provider and storage")
+struct TokenProviderTests {
+    private func makeProvider(
+        tokens: OAuthTokens?,
+        replies: [FakeHTTP.Reply],
+        delay: Duration = .zero
+    ) throws -> (TokenProvider, InMemoryTokenStore, FakeHTTP) {
+        let store = InMemoryTokenStore()
+        if let tokens { try store.save(tokens, forSource: "S1") }
+        let http = FakeHTTP(replies, delay: delay)
+        let client = OAuthClient(configuration: configuration, http: http, now: { fixedNow })
+        return (TokenProvider(client: client, store: store, sourceId: "S1"), store, http)
+    }
+
+    @Test("A token with more than five minutes left is used as is")
+    func validToken() async throws {
+        let tokens = OAuthTokens(accessToken: "a1", refreshToken: "r1", expiresAt: fixedNow + 10 * 60)
+        let (provider, _, http) = try makeProvider(tokens: tokens, replies: [])
+        #expect(try await provider.validAccessToken() == "a1")
+        #expect(await http.requestCount == 0)
+    }
+
+    @Test("A token within five minutes of expiry is refreshed first and the new one is stored")
+    func refreshBeforeExpiry() async throws {
+        let tokens = OAuthTokens(accessToken: "a1", refreshToken: "r1", expiresAt: fixedNow + 4 * 60)
+        let (provider, store, http) = try makeProvider(
+            tokens: tokens,
+            replies: [.init(status: 200, body: tokenJSON(access: "a2", refresh: "r2"))]
+        )
+        #expect(try await provider.validAccessToken() == "a2")
+        #expect(await http.requestCount == 1)
+        #expect(try store.tokens(forSource: "S1")?.refreshToken == "r2")
+    }
+
+    @Test("Concurrent callers share one refresh")
+    func sharedRefresh() async throws {
+        let tokens = OAuthTokens(accessToken: "a1", refreshToken: "r1", expiresAt: fixedNow)
+        let (provider, _, http) = try makeProvider(
+            tokens: tokens,
+            replies: [.init(status: 200, body: tokenJSON(access: "a2"))],
+            delay: .milliseconds(100)
+        )
+        async let first = provider.validAccessToken()
+        async let second = provider.validAccessToken()
+        #expect(try await [first, second] == ["a2", "a2"])
+        #expect(await http.requestCount == 1)
+    }
+
+    @Test("A rejected refresh or missing tokens mean the source must be re-linked; network errors pass through")
+    func failures() async throws {
+        let expiring = OAuthTokens(accessToken: "a1", refreshToken: "r1", expiresAt: fixedNow)
+        let (rejected, _, _) = try makeProvider(
+            tokens: expiring,
+            replies: [.init(status: 400, body: #"{"error":"invalid_grant"}"#)]
+        )
+        await #expect(throws: RemoteSourceError.needsRelink) { _ = try await rejected.validAccessToken() }
+
+        let (empty, _, _) = try makeProvider(tokens: nil, replies: [])
+        await #expect(throws: RemoteSourceError.needsRelink) { _ = try await empty.validAccessToken() }
+
+        let (offline, _, _) = try makeProvider(tokens: expiring, replies: [])
+        await #expect(throws: URLError.self) { _ = try await offline.validAccessToken() }
+    }
+
+    @Test("Signing out revokes with the bearer token and deletes the tokens, even if revocation fails")
+    func signOut() async throws {
+        let tokens = OAuthTokens(accessToken: "a1", refreshToken: "r1", expiresAt: nil)
+        let (provider, store, http) = try makeProvider(tokens: tokens, replies: [.init(status: 500, body: "")])
+        try await provider.signOut()
+
+        let sent = await http.requests
+        #expect(sent.first?.url?.path() == "/2/auth/token/revoke")
+        #expect(sent.first?.value(forHTTPHeaderField: "Authorization") == "Bearer a1")
+        #expect(try store.tokens(forSource: "S1") == nil)
+    }
+
+    @Test("Tokens from a sign-in never reach UserDefaults")
+    func notInUserDefaults() async throws {
+        let (provider, store, _) = try makeProvider(tokens: nil, replies: [])
+        let tokens = OAuthTokens(accessToken: "unique-access-7f3a", refreshToken: "unique-refresh-7f3a", expiresAt: nil)
+        try await provider.signedIn(with: tokens)
+        #expect(try store.tokens(forSource: "S1") == tokens)
+
+        let defaults = UserDefaults.standard.dictionaryRepresentation().map { "\($0.key)=\($0.value)" }
+        #expect(!defaults.contains { $0.contains("7f3a") })
+    }
+
+    @Test("Keychain items are per source, this-device-only, and readable after first unlock")
+    func keychainAttributes() {
+        let store = KeychainTokenStore(kind: .dropbox)
+        let query = store.addQuery(account: "S1", data: Data("x".utf8))
+        #expect(query[kSecClass as String] as? String == kSecClassGenericPassword as String)
+        #expect(query[kSecAttrService as String] as? String == "ereader.dropbox")
+        #expect(query[kSecAttrAccount as String] as? String == "S1")
+        #expect(
+            query[kSecAttrAccessible as String] as? String == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String
+        )
+        #expect(query[kSecUseDataProtectionKeychain as String] as? Bool == true)
+    }
+}
