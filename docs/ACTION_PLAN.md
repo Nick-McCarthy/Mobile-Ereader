@@ -24,7 +24,7 @@ Each task has an id (`P<phase>.<n>`), a short description, and **Done when** acc
 
 ## Phase 1 — Local data foundation
 
-- [ ] **P1.1 Database & migrations** — GRDB `DatabaseQueue` in Application Support with file protection; migration v1 creating all tables in [`DATA_MODEL.md`](DATA_MODEL.md) incl. FTS5 + triggers.
+- [x] **P1.1 Database & migrations** — GRDB `DatabaseQueue` in Application Support with file protection; migration v1 creating all tables in [`DATA_MODEL.md`](DATA_MODEL.md) incl. FTS5 + triggers.
   *Done when:* migration unit tests pass on an in-memory DB; FTS search returns rows by title and author.
 - [ ] **P1.2 Repositories** ∥ — `BookRepository`, `CollectionRepository`, `SeriesRepository`, `BookmarkRepository`, `ReadingPositionRepository` with async `observe…` APIs.
 - [ ] **P1.3 EPUB metadata parser** ∥ — OPF parsing (title, authors + roles + file-as, date, series, cover href) per [`EPUB_METADATA.md`](EPUB_METADATA.md); placeholders for missing fields; cover thumbnail generation; hardening limits.
