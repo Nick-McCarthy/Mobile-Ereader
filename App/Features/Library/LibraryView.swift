@@ -44,7 +44,7 @@ struct LibraryView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     if importController.isImporting {
-                        ProgressView()
+                        ProgressView().accessibilityLabel("Importing Books")
                     } else {
                         Button("Import Books", systemImage: "plus") { showingImporter = true }
                     }

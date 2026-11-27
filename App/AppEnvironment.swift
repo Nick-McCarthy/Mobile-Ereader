@@ -11,15 +11,32 @@ struct AppEnvironment: Sendable {
     let importer: LocalBookImporter
     /// Removes Keychain tokens left by an earlier install. Nil in UI tests, which never touch the Keychain.
     let tokenCleanup: OrphanedTokenCleanup?
+    /// UI tests only (`-UITestSeedBook`): a book to show, so audits see a non-empty library.
+    let uiTestSeedBook: Book?
 
-    init(database: AppDatabase, files: BookFileStore, usesKeychain: Bool = true) {
+    init(database: AppDatabase, files: BookFileStore, usesKeychain: Bool = true, uiTestSeedBook: Book? = nil) {
         self.repositories = DatabaseRepositories(database: database)
         self.files = files
         self.importer = LocalBookImporter(books: repositories.books, series: repositories.series, files: files)
         let sources = repositories.sources
         let stores = usesKeychain ? OrphanedTokenCleanup.keychainStores() : nil
         self.tokenCleanup = stores.map { OrphanedTokenCleanup(sources: sources, stores: $0) }
+        self.uiTestSeedBook = uiTestSeedBook
     }
+
+    /// One-off work at launch: seeds the UI-test book, then removes Keychain tokens left by an earlier
+    /// install (finding F-A1).
+    func prepareAtLaunch() async {
+        if let uiTestSeedBook { try? await repositories.books.save(uiTestSeedBook) }
+        _ = try? await tokenCleanup?.run()
+    }
+
+    private static let uiTestBook = Book(
+        id: "uitest-book",
+        sourceKind: .local,
+        title: "The Tombs of Atuan",
+        authorRaw: "Ursula K. Le Guin"
+    )
 
     /// The on-device database and folders. UI tests (`-UITestMode`) get an empty in-memory library instead,
     /// so runs don't depend on each other.
@@ -31,7 +48,13 @@ struct AppEnvironment: Sendable {
                 applicationSupport: root.appendingPathComponent("Support", isDirectory: true),
                 caches: root.appendingPathComponent("Caches", isDirectory: true)
             )
-            return AppEnvironment(database: try AppDatabase.inMemory(), files: files, usesKeychain: false)
+            let seed = arguments.contains("-UITestSeedBook") ? uiTestBook : nil
+            return AppEnvironment(
+                database: try AppDatabase.inMemory(),
+                files: files,
+                usesKeychain: false,
+                uiTestSeedBook: seed
+            )
         }
         return AppEnvironment(database: try AppDatabase.onDisk(at: AppDatabase.defaultURL()), files: try .standard())
     }
