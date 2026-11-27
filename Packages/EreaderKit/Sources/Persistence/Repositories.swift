@@ -65,6 +65,8 @@ public protocol SeriesRepository: Sendable {
     func series(containing bookId: Book.ID) async throws -> (series: Series, position: Double?)?
     /// Throws `RepositoryError` for empty or duplicate names.
     func createSeries(named name: String) async throws -> Series
+    /// The series with this name (ignoring case), created if there is none. Throws `RepositoryError.emptyName`.
+    func findOrCreateSeries(named name: String) async throws -> Series
     func renameSeries(id: Series.ID, to name: String) async throws
     /// Deletes the series. Its books stay in the library.
     func deleteSeries(id: Series.ID) async throws

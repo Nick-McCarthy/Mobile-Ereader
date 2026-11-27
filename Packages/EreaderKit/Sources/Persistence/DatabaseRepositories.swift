@@ -249,6 +249,17 @@ public struct DatabaseSeriesRepository: SeriesRepository {
         }
     }
 
+    public func findOrCreateSeries(named name: String) async throws -> Series {
+        let name = try validatedName(name)
+        return try await database.writer.write { db in
+            // `name` is a NOCASE column, so this matches the unique index's idea of a duplicate.
+            if let existing = try Series.filter(Column("name") == name).fetchOne(db) { return existing }
+            let series = Series(name: name)
+            try series.insert(db)
+            return series
+        }
+    }
+
     public func renameSeries(id: Series.ID, to name: String) async throws {
         let name = try validatedName(name)
         try await mappingDuplicateName {

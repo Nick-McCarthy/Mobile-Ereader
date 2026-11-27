@@ -28,6 +28,18 @@ struct LibraryView: View {
                     }
                 }
             }
+            // On the content rather than the stack, so it doesn't share a view with the error alert.
+            .alert(
+                "Already in Your Library",
+                isPresented: Binding(get: { !importController.duplicates.isEmpty }, set: { _ in }),
+                presenting: importController.duplicates.first
+            ) { _ in
+                Button("Replace") { importController.resolveFirstDuplicate(.replace) }
+                Button("Keep Both") { importController.resolveFirstDuplicate(.keepBoth) }
+                Button("Skip", role: .cancel) { importController.resolveFirstDuplicate(.skip) }
+            } message: { duplicate in
+                Text("“\(duplicate.title)” is already in your library. Replace it, or keep both?")
+            }
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {

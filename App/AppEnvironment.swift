@@ -15,7 +15,7 @@ struct AppEnvironment: Sendable {
     init(database: AppDatabase, files: BookFileStore, usesKeychain: Bool = true) {
         self.repositories = DatabaseRepositories(database: database)
         self.files = files
-        self.importer = LocalBookImporter(books: repositories.books, files: files)
+        self.importer = LocalBookImporter(books: repositories.books, series: repositories.series, files: files)
         let sources = repositories.sources
         let stores = usesKeychain ? OrphanedTokenCleanup.keychainStores() : nil
         self.tokenCleanup = stores.map { OrphanedTokenCleanup(sources: sources, stores: $0) }
