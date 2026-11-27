@@ -16,16 +16,13 @@ private actor FakeHTTP: HTTPClient {
 
     private var replies: [Reply]
     private(set) var requests: [URLRequest] = []
-    private let delay: Duration
 
-    init(_ replies: [Reply], delay: Duration = .zero) {
+    init(_ replies: [Reply]) {
         self.replies = replies
-        self.delay = delay
     }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         requests.append(request)
-        if delay > .zero { try await Task.sleep(for: delay) }
         guard !replies.isEmpty else { throw URLError(.notConnectedToInternet) }
         let reply = replies.removeFirst()
         let url = request.url ?? URL(fileURLWithPath: "/")
@@ -43,6 +40,55 @@ private actor FakeHTTP: HTTPClient {
             if parts.count == 2 { fields[parts[0]] = parts[1] }
         }
         return fields
+    }
+}
+
+/// Holds every token request until `open()`, then answers each with a new access token that is already due
+/// for refresh. So a second, unshared refresh always makes a second request, however the calls interleave.
+private actor GatedTokenHTTP: HTTPClient {
+    private var isOpen = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private(set) var requestCount = 0
+
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requestCount += 1
+        let number = requestCount
+        if !isOpen { await withCheckedContinuation { waiting.append($0) } }
+        let url = request.url ?? URL(fileURLWithPath: "/")
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+        return (Data(tokenJSON(access: "a\(number + 1)", expiresIn: 0).utf8), response ?? HTTPURLResponse())
+    }
+
+    func open() {
+        isOpen = true
+        for continuation in waiting { continuation.resume() }
+        waiting = []
+    }
+}
+
+/// Counts reads, so a test can tell when a caller has looked at the stored tokens.
+private final class ReadCountingTokenStore: TokenStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private let base = InMemoryTokenStore()
+    private var reads = 0
+
+    var readCount: Int { lock.withLock { reads } }
+
+    func tokens(forSource sourceId: String) throws -> OAuthTokens? {
+        lock.withLock { reads += 1 }
+        return try base.tokens(forSource: sourceId)
+    }
+
+    func save(_ tokens: OAuthTokens, forSource sourceId: String) throws {
+        try base.save(tokens, forSource: sourceId)
+    }
+
+    func deleteTokens(forSource sourceId: String) throws {
+        try base.deleteTokens(forSource: sourceId)
+    }
+
+    func storedSourceIds() throws -> [String] {
+        try base.storedSourceIds()
     }
 }
 
@@ -199,12 +245,11 @@ struct OAuthTests {
 struct TokenProviderTests {
     private func makeProvider(
         tokens: OAuthTokens?,
-        replies: [FakeHTTP.Reply],
-        delay: Duration = .zero
+        replies: [FakeHTTP.Reply]
     ) throws -> (TokenProvider, InMemoryTokenStore, FakeHTTP) {
         let store = InMemoryTokenStore()
         if let tokens { try store.save(tokens, forSource: "S1") }
-        let http = FakeHTTP(replies, delay: delay)
+        let http = FakeHTTP(replies)
         let client = OAuthClient(configuration: configuration, http: http, now: { fixedNow })
         return (TokenProvider(client: client, store: store, sourceId: "S1"), store, http)
     }
@@ -231,14 +276,22 @@ struct TokenProviderTests {
 
     @Test("Concurrent callers share one refresh")
     func sharedRefresh() async throws {
-        let tokens = OAuthTokens(accessToken: "a1", refreshToken: "r1", expiresAt: fixedNow)
-        let (provider, _, http) = try makeProvider(
-            tokens: tokens,
-            replies: [.init(status: 200, body: tokenJSON(access: "a2"))],
-            delay: .milliseconds(100)
-        )
+        let store = ReadCountingTokenStore()
+        try store.save(OAuthTokens(accessToken: "a1", refreshToken: "r1", expiresAt: fixedNow), forSource: "S1")
+        let http = GatedTokenHTTP()
+        let client = OAuthClient(configuration: configuration, http: http, now: { fixedNow })
+        let provider = TokenProvider(client: client, store: store, sourceId: "S1")
+
         async let first = provider.validAccessToken()
         async let second = provider.validAccessToken()
+        // Each caller reads the store and, in the same actor turn, joins or starts the refresh. Once both
+        // have read, the second has joined the first's refresh or sent its own request.
+        for _ in 0..<100_000 where store.readCount < 2 {
+            await Task.yield()
+        }
+        #expect(store.readCount == 2)
+        await http.open()
+
         #expect(try await [first, second] == ["a2", "a2"])
         #expect(await http.requestCount == 1)
     }

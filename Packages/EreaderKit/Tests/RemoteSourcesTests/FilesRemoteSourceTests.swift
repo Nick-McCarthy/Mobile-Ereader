@@ -120,6 +120,27 @@ struct FilesRemoteSourceTests {
         #expect(matches.first?.size == 4)
     }
 
+    // A stale bookmark can't be made in a test: only the system marks one stale (after a volume or folder
+    // move), so `resolveRoot`'s refresh branch is checked by review, not by a test.
+
+    @Test("A book deleted between listings is missing from the next one, which starts with reset")
+    func deletedBetweenListings() async throws {
+        let tree = try TempTree()
+        defer { tree.remove() }
+        let source = try await tree.linkedSource()
+        _ = try await tree.file("a.epub", from: source)
+
+        try FileManager.default.removeItem(at: tree.url("a.epub"))
+        let changes = try await collect(source.enumerateEPUBs(under: .root, since: SyncCursor("files:1")))
+        #expect(changes.first == .reset, "reset lets the sync engine drop books the listing no longer has")
+        let ids = changes.compactMap { change -> String? in
+            if case .upsert(let file) = change { return file.remoteId }
+            return nil
+        }
+        #expect(!ids.contains("a.epub"))
+        #expect(ids.contains("Fiction/b.EPUB"))
+    }
+
     @Test("The walk stops at the next item once its task is cancelled")
     func walkChecksCancellationPerItem() async throws {
         let tree = try TempTree()
