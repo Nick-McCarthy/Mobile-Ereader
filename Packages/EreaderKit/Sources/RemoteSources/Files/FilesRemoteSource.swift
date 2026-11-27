@@ -129,8 +129,7 @@ public actor FilesRemoteSource: RemoteSource {
     }
 
     private static func coordinatedCopy(from source: URL, to destination: URL) async throws {
-        // NSFileAccessIntent isn't Sendable; it is only read on the coordinator's queue after this point.
-        nonisolated(unsafe) let intent = NSFileAccessIntent.readingIntent(with: source, options: .withoutChanges)
+        let intent = NSFileAccessIntent.readingIntent(with: source, options: .withoutChanges)
         let queue = OperationQueue()
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             NSFileCoordinator().coordinate(with: [intent], queue: queue) { error in
