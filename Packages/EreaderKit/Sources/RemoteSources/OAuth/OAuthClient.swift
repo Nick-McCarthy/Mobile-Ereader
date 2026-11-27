@@ -42,7 +42,9 @@ public struct OAuthClient: Sendable {
     public func makeAuthorizationRequest() throws -> AuthorizationRequest {
         let pkce = try PKCE()
         let state = try OAuthRandom.base64URL(byteCount: 16)
-        var components = URLComponents(url: configuration.authorizeURL, resolvingAgainstBaseURL: false)
+        guard var components = URLComponents(url: configuration.authorizeURL, resolvingAgainstBaseURL: false) else {
+            throw OAuthError.invalidResponse
+        }
         var items = [
             URLQueryItem(name: "client_id", value: configuration.clientId),
             URLQueryItem(name: "response_type", value: "code"),
@@ -57,8 +59,9 @@ public struct OAuthClient: Sendable {
         for (name, value) in configuration.extraAuthorizeParameters.sorted(by: { $0.key < $1.key }) {
             items.append(URLQueryItem(name: name, value: value))
         }
-        components?.queryItems = (components?.queryItems ?? []) + items
-        guard let url = components?.url else { throw OAuthError.invalidResponse }
+        let existing = components.queryItems ?? []
+        components.queryItems = existing + items
+        guard let url = components.url else { throw OAuthError.invalidResponse }
         return AuthorizationRequest(url: url, state: state, pkce: pkce)
     }
 
