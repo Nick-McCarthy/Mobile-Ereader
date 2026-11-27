@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  App privacy manifest. See docs/SECURITY_AND_APP_STORE.md.
+  - No tracking and no tracking domains.
+  - No collected data types: nothing leaves the device except traffic to the service the user links.
+  - Required-reason APIs: keep this list in sync with the code. Add NSPrivacyAccessedAPICategoryDiskSpace
+    (E174.1) when the download manager starts checking free space.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<!-- Read/write values only accessible to the app itself (settings via @AppStorage). -->
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<!-- Timestamps of files inside the app container (downloaded books, database). -->
+				<string>C617.1</string>
+				<!-- Timestamps of files the user granted access to via the folder picker (iCloud Drive / Files sync). -->
+				<string>3B52.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

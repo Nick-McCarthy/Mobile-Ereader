@@ -43,6 +43,9 @@ jobs:
       - name: Lint (swift-format)
         run: xcrun swift-format lint --strict --recursive --parallel App UITests Packages
 
+      - name: Compliance checks (source)
+        run: scripts/check-compliance.sh
+
       - name: Cache Swift packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -105,10 +108,14 @@ jobs:
             -scheme Ereader \
             -destination "$SIMULATOR" \
             -resultBundlePath build/Ereader.xcresult \
+            -derivedDataPath build/DerivedData \
             -clonedSourcePackagesDirPath build/SourcePackages \
             $PKG_FLAGS \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
+
+      - name: Compliance checks (built app)
+        run: scripts/check-compliance.sh build/DerivedData/Build/Products/Debug-iphonesimulator/Ereader.app
 
       - name: Export screenshots
         if: always()

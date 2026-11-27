@@ -43,6 +43,7 @@ targets:
         PRODUCT_NAME: Ereader
         INFOPLIST_FILE: App/Info.plist
         GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: App/Ereader.entitlements
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     dependencies:
