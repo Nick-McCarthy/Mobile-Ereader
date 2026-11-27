@@ -21,7 +21,8 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
   - **Add to Series** → sheet: pick series (or "New Series…") and optional number; "Remove from series".
   - **Download** / **Remove Download** (depending on state).
   - **Remove from Library** (destructive, confirmation dialog; for local imports it deletes the file).
-- **Empty state:** explains how to link Google Drive or import a file, with buttons for both.
+- **Empty state:** explains how to add books, with buttons for *Connect iCloud Drive*, *Connect Dropbox*, *Connect OneDrive*, and *Import a File*.
+- **Source indicator:** a small source glyph (iCloud / Dropbox / OneDrive / device) in list rows and the Edit Details sheet. *Missing from source* books show a subtle badge.
 - **Sync banner:** slim progress banner at top while a sync is running.
 
 ## Collections tab
@@ -34,12 +35,12 @@ Chosen layout: **collapsible sections (accordion) inside a `List`** with `.listS
 
 ## Settings
 Grouped `Form`:
-- **Google Drive**
-  - Status row: linked account email (or "Not linked").
-  - *Link Google Drive* / *Unlink* (unlink asks whether to keep or remove Drive books from the library).
-  - *Library Folder*: shows chosen folder path → pushes the folder browser.
-  - **Sync Now** button with last-synced time and live progress (found / processed / errors). *Cancel* while running.
-  - Footer text explaining what access is requested and why (read-only).
+- **Book Sources** (details in [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md))
+  - One row per service: **iCloud Drive / Files**, **Dropbox**, **OneDrive**. Each shows *Not linked* or the account label + chosen folder path + last-synced time; a warning badge if it needs re-linking. The user can link any combination.
+  - Tapping an unlinked row: iCloud → system folder picker; Dropbox / OneDrive → sign-in sheet (`ASWebAuthenticationSession`), then the in-app folder browser (*This Folder* / *Whole Dropbox/OneDrive*).
+  - Tapping a linked row → detail screen: *Change Folder*, *Sync This Source*, *Unlink* (asks whether to keep or remove that source's books from the library).
+  - **Sync Now** button (syncs all linked sources) with live progress per source (found / processed / errors). *Cancel* while running.
+  - Footer text: access is read-only, the app never modifies your files, and nothing is sent anywhere except the service you linked. iCloud footer notes that other installed file providers (such as Google Drive) also work through this option.
 - **Library**
   - *Author name format*: As stored · First Last · Last, First (live preview row using a sample author).
   - *Create Collection…* → name prompt (validates uniqueness).
@@ -47,4 +48,4 @@ Grouped `Form`:
   - *Manage Collections* / *Manage Series* → lists with rename/delete.
 - **Reading defaults** — default font, size, page colour (reader drawer edits per-session values; these are the starting defaults).
 - **Storage** — space used by downloads, *Remove All Downloads*.
-- **About & Privacy** — version, privacy policy link, open-source licences (acknowledgements for Readium, GRDB, GoogleSignIn, ZIPFoundation), *Delete All App Data*.
+- **About & Privacy** — version, privacy policy link, open-source licences (acknowledgements for Readium, GRDB, ZIPFoundation), *Delete All App Data*.

@@ -11,22 +11,22 @@
 - Keep views small: a view file > ~200 lines should be split into subviews.
 
 ## Architecture rules
-- Feature code talks to protocols (`BookRepository`, `DriveClient`, `DownloadManaging`), never to GRDB/URLSession directly.
+- Feature code talks to protocols (`BookRepository`, `RemoteSource`, `DownloadManaging`), never to GRDB/URLSession directly.
 - Only `App/Features/Reader` imports Readium navigator modules.
 - Pure logic (author formatting, sort keys, OPF parsing, sync diffing) lives in packages and must have unit tests.
 - New DB columns/tables = new migration + update [`DATA_MODEL.md`](DATA_MODEL.md) in the same change.
 
 ## Testing
-- **Unit (Swift Testing):** `Core`, `EPUBMetadata`, `Persistence`, `DriveSync` — run with `swift test` inside each package or the Xcode test plan.
+- **Unit (Swift Testing):** `Core`, `EPUBMetadata`, `Persistence`, `RemoteSources` — run with `swift test` inside each package or the Xcode test plan.
 - **Fixtures:** `Packages/EPUBMetadata/Tests/Fixtures/` — small public-domain or hand-made EPUBs covering EPUB 2, EPUB 3, missing metadata, odd covers, malformed zips. Never commit copyrighted books.
-- **UI (XCUITest):** library sort/view switching, long-press menu, reader chrome toggle vs. swipe, bookmarks, progress drag. Launch with `-UITestMode` to use an in-memory DB seeded with fixtures and a fake Drive client.
+- **UI (XCUITest):** library sort/view switching, long-press menu, reader chrome toggle vs. swipe, bookmarks, progress drag. Launch with `-UITestMode` to use an in-memory DB seeded with fixtures and a `FakeRemoteSource` for each provider.
 - A task is not done until it builds with zero warnings and its tests pass:
   ```
   xcodebuild -scheme Ereader -destination 'platform=iOS Simulator,name=iPhone 16' test
   ```
 
 ## Git workflow
-- Branch per action-plan task: `feature/<phase>-<short-name>` (e.g. `feature/p2-drive-sync`).
+- Branch per action-plan task: `feature/<phase>-<short-name>` (e.g. `feature/p2-sync-engine`).
 - Small commits with imperative messages; reference the action-plan task id (e.g. `P2.3: Add remote ZIP reader`).
-- Never commit secrets (`Config/Secrets.xcconfig`, `GoogleService-Info.plist` with real ids if treated as private), `.DS_Store`, `DerivedData`, or `xcuserdata`.
+- Never commit secrets (`Config/Secrets.xcconfig`, OAuth tokens, recorded API responses that contain real account data), `.DS_Store`, `DerivedData`, or `xcuserdata`.
 - When finishing a task, tick it in [`ACTION_PLAN.md`](ACTION_PLAN.md).

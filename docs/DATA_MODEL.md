@@ -8,11 +8,12 @@ SQLite via GRDB. All schema changes go through a **new, append-only** `DatabaseM
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT PK | UUID string, app-generated |
-| `source` | TEXT | `drive` \| `local` |
-| `driveFileId` | TEXT UNIQUE NULL | Drive file id (null for local imports) |
-| `driveParentPath` | TEXT NULL | Human-readable folder path inside the synced root, for display/debug |
-| `driveMd5` | TEXT NULL | `md5Checksum` from Drive; detects content changes |
-| `driveModifiedTime` | DATETIME NULL | |
+| `sourceKind` | TEXT | `local` \| `iCloud` \| `dropbox` \| `oneDrive` |
+| `sourceId` | TEXT NULL FK → `library_source.id` (ON DELETE SET NULL) | null for local imports |
+| `remoteId` | TEXT NULL | Dropbox `id:…`, Graph item id, or iCloud path relative to the root. UNIQUE together with `sourceId` |
+| `remotePath` | TEXT NULL | Human-readable path inside the synced root, for display/debug |
+| `remoteVersion` | TEXT NULL | Change token: Dropbox `content_hash`, OneDrive `cTag`, iCloud `<modDate>-<size>` |
+| `remoteModifiedAt` | DATETIME NULL | |
 | `fileSize` | INTEGER NULL | bytes |
 | `title` | TEXT NOT NULL | Effective title (user override if set, else parsed, else `"Unknown Title"`) |
 | `titleSort` | TEXT NOT NULL | Lower-cased, leading articles ("the", "a", "an") stripped |
@@ -24,11 +25,11 @@ SQLite via GRDB. All schema changes go through a **new, append-only** `DatabaseM
 | `publicationDateSort` | INTEGER NULL | `yyyymmdd`, nulls sort last |
 | `language`, `publisher`, `description`, `identifier` | TEXT NULL | Nice-to-have, cheap to capture |
 | `coverPath` | TEXT NULL | Relative path in `Caches/Covers`; null → placeholder cover |
-| `localFilePath` | TEXT NULL | Relative path under `Application Support/Books`; null → not downloaded |
+| `localFilePath` | TEXT NULL | Relative path under `Application Support/Books` (`remote/` or `local/`); null → not downloaded |
 | `downloadState` | TEXT NOT NULL | `notDownloaded` \| `downloading` \| `downloaded` \| `failed` |
 | `isUserEdited` | BOOLEAN | If true, sync must not overwrite edited fields |
 | `userEditedFields` | TEXT (JSON array) | Which fields were edited (`title`, `author`, `publicationDate`, `cover`) |
-| `isMissingFromSource` | BOOLEAN | File no longer found in Drive on last sync (kept so reading data isn't lost) |
+| `isMissingFromSource` | BOOLEAN | File no longer found in its source on last sync (kept so reading data isn't lost) |
 | `dateAdded`, `lastOpenedAt` | DATETIME | `lastOpenedAt` drives "Recently viewed" sort |
 | `progression` | REAL | 0…1 cached from last locator, for list display |
 
@@ -55,8 +56,23 @@ Columns: `title`, `authorRaw`, `authorDisplay` (both name orders so either searc
 
 Series may also be pre-populated from EPUB metadata (`calibre:series` / `calibre:series_index`, or EPUB 3 `belongs-to-collection` + `collection-type="series"` + `group-position`).
 
-### `drive_root`
-`id` · `driveId` (null for My Drive, else shared-drive id) · `folderId` · `displayName` · `lastSyncedAt` · `lastSyncStatus`. v1 supports **one** root; table allows more later.
+### `library_source`
+One row per linked source. A user may link any combination of iCloud Drive, Dropbox, and OneDrive, with one root folder each. See [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID; also the Keychain account name for that source's tokens |
+| `kind` | TEXT | `iCloud` \| `dropbox` \| `oneDrive` (UNIQUE in v1: one link per service) |
+| `accountLabel` | TEXT NULL | Display name / email shown in Settings (on-device only) |
+| `rootId` | TEXT NULL | Dropbox folder id/path or Graph item id (`""` / `root` = whole drive) |
+| `rootBookmark` | BLOB NULL | iCloud / Files folder bookmark data |
+| `rootDisplayPath` | TEXT | e.g. `/Books/Fiction` |
+| `syncCursor` | TEXT NULL | Dropbox `list_folder` cursor or Graph `deltaLink`; null → full listing |
+| `status` | TEXT | `ok` \| `needsRelink` \| `error` |
+| `lastSyncedAt` | DATETIME NULL | |
+| `lastSyncError` | TEXT NULL | Short, non-sensitive message |
+
+Tokens are **never** stored in this table. They live in the Keychain.
 
 ### `app_settings`
 Prefer `UserDefaults` (`@AppStorage`) for simple prefs: author display format, library view mode, sort key/direction, reader defaults. Reader **per-book** overrides, if added, go in a `book_reader_prefs` table.

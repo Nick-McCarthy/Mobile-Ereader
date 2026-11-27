@@ -10,12 +10,12 @@ Each task has an id (`P<phase>.<n>`), a short description, and **Done when** acc
 
 > ⚠️ iOS apps must be built with **Xcode on macOS**. The repo currently lives on a Windows machine; development needs a Mac (local, remote such as MacinCloud, or GitHub Actions `macos-latest` runners for CI builds). Docs and pure-Swift package logic can be authored anywhere, but nothing can be run on a simulator/device without macOS.
 
-- [ ] **P0.1 Accounts** — Apple Developer Program membership (needed for device testing beyond 7-day free provisioning, TestFlight, App Store); Google Cloud project with the Drive API enabled and an OAuth consent screen (Testing mode, add your Google account as a test user); iOS OAuth client id created for the bundle id.
-  *Done when:* bundle id (e.g. `com.<you>.ereader`) is registered and the OAuth client id is stored in a local, git-ignored `Config/Secrets.xcconfig`.
+- [ ] **P0.1 Accounts** — Apple Developer Program membership (needed for device testing beyond 7-day free provisioning, TestFlight, App Store); a **Dropbox** app in the App Console (scoped access, Full Dropbox, read-only scopes); a **Microsoft Entra** app registration (personal + work/school accounts, iOS public client). iCloud Drive needs no setup.
+  *Done when:* bundle id (e.g. `com.<you>.ereader`) is registered and the Dropbox app key + Microsoft client id are stored in a local, git-ignored `Config/Secrets.xcconfig`.
 - [ ] **P0.2 Repo scaffolding** — `.gitignore` (Xcode, SPM, `Secrets.xcconfig`), `.swift-format`, `Config/Secrets.example.xcconfig`, README with build steps.
-- [ ] **P0.3 Xcode project** — SwiftUI app target `Ereader` (iOS 17+, iPhone only, portrait + landscape), local packages `Core`, `Persistence`, `EPUBMetadata`, `DriveSync`, `BookStorage` per [`ARCHITECTURE.md`](ARCHITECTURE.md#module-layout). Swift 6 strict concurrency on. Optionally XcodeGen `project.yml`.
+- [ ] **P0.3 Xcode project** — SwiftUI app target `Ereader` (iOS 17+, iPhone only, portrait + landscape), local packages `Core`, `Persistence`, `EPUBMetadata`, `RemoteSources`, `BookStorage` per [`ARCHITECTURE.md`](ARCHITECTURE.md#module-layout). Swift 6 strict concurrency on. Optionally XcodeGen `project.yml`.
   *Done when:* empty app with three tabs (Library / Collections / Settings) builds and runs; `swift test` passes in every package.
-- [ ] **P0.4 Dependencies** — add via SPM and pin: Readium Swift Toolkit, GRDB, GoogleSignIn-iOS, ZIPFoundation.
+- [ ] **P0.4 Dependencies** — add via SPM and pin: Readium Swift Toolkit, GRDB, ZIPFoundation. (No vendor auth SDKs; see [`ARCHITECTURE.md`](ARCHITECTURE.md#tech-stack-decision).)
 - [ ] **P0.5 Compliance skeleton** — `PrivacyInfo.xcprivacy`, `ITSAppUsesNonExemptEncryption = NO`, Data Protection entitlement, no ATS exceptions. See [`SECURITY_AND_APP_STORE.md`](SECURITY_AND_APP_STORE.md).
 - [ ] **P0.6 CI** — GitHub Actions on `macos-latest`: build + unit tests on every PR.
 
@@ -29,19 +29,25 @@ Each task has an id (`P<phase>.<n>`), a short description, and **Done when** acc
 - [ ] **P1.4 Author name normalisation** ∥ — stored-format detection, component parsing, `AuthorNameFormatter` with the three display modes.
   *Done when:* the tricky-names fixture table in `EPUB_METADATA.md` passes.
 - [ ] **P1.5 Local import** — Files-app import (`.fileImporter` for `.epub`) and "Open in…" handling (`CFBundleDocumentTypes` for `org.idpf.epub-container`); copy into `Books/local/`, parse, insert.
-  *Done when:* importing a fixture EPUB shows it in the DB with cover and metadata. This gives a usable app before Google Drive exists (also useful for App Review).
+  *Done when:* importing a fixture EPUB shows it in the DB with cover and metadata. This gives a usable app before any cloud source exists (also useful for App Review).
 
-## Phase 2 — Google Drive link & sync
+## Phase 2 — Book sources (iCloud Drive, Dropbox, OneDrive) & sync
 
-- [ ] **P2.1 Google sign-in** — GoogleSignIn config, *Link* / *Unlink* (revoke) in Settings, incremental `drive.readonly` scope request, token refresh. Show linked email.
-- [ ] **P2.2 Drive client** — `DriveClient` protocol + `URLSession` implementation: list folders, list children (paged), shared drives, ranged media GET, full download; retries/backoff per [`GOOGLE_DRIVE_SYNC.md`](GOOGLE_DRIVE_SYNC.md#robustness). `FakeDriveClient` for tests.
-- [ ] **P2.3 Remote ZIP reader** — EOCD/central-directory/entry fetch via `Range`, inflate, ZIP64 support, full-download fallback.
-  *Done when:* reads metadata from fixture EPUBs served by a fake ranged server in tests, issuing ≤5 requests per book.
-- [ ] **P2.4 Folder browser** — My Drive + shared drives, breadcrumbs, *Use This Folder*; persists `drive_root`.
-- [ ] **P2.5 Sync engine** — recursive enumeration, diff (new / changed / missing), bounded-concurrency metadata fetch, respects `userEditedFields`, progress stream, cancellation, idempotent resume.
-  *Done when:* fake-client tests cover nested folders, pagination, shortcuts/cycles, deletions, md5 changes, rate-limit retry.
-- [ ] **P2.6 Sync UI** — *Sync Now* button with progress + last-synced time in Settings; library banner; error surfacing (re-link prompt on auth failure).
-- [ ] **P2.7 On-demand download** — `DownloadManager` actor; tap-to-download with progress, cancel, atomic move, backup exclusion; *Remove Download*.
+The user can link any combination of the three. Spec: [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md).
+
+- [ ] **P2.1 Source abstraction** — `RemoteSource` protocol, `RemoteFile` / `RemoteChange` / `SyncCursor` types, `library_source` repository, `FakeRemoteSource` for tests.
+- [ ] **P2.2 OAuth + Keychain** — shared PKCE flow on `ASWebAuthenticationSession` (state check, code exchange, refresh, revoke), `TokenStore` on the Keychain.
+  *Done when:* unit tests cover PKCE generation, state mismatch rejection, refresh-before-expiry, and that tokens never touch UserDefaults or the DB.
+- [ ] **P2.3 Remote ZIP reader** — provider-agnostic `ByteRangeReading` → EOCD / central-directory / entry fetch, inflate, ZIP64 support, full-download fallback.
+  *Done when:* reads metadata from fixture EPUBs served by a fake ranged reader in tests, issuing ≤5 reads per book.
+- [ ] **P2.4 iCloud Drive / Files adapter** ∥ — folder picker, bookmark persistence + security-scoped access, enumeration incl. `.icloud` placeholders, coordinated fetch + evict for metadata, copy-to-sandbox download.
+- [ ] **P2.5 Dropbox adapter** ∥ — app key config + URL scheme, sign-in, folder browser, recursive `list_folder` with saved cursor (incl. `reset`), ranged and full download.
+- [ ] **P2.6 OneDrive adapter** ∥ — Entra client id config + redirect, sign-in, folder browser, BFS `children` walk (+ `delta` on personal accounts), ranged and full download via pre-authenticated URL.
+  *Done when (P2.4–P2.6):* each adapter passes tests against sanitised recorded responses (or a temp directory for iCloud), including pagination, deletions, and auth expiry.
+- [ ] **P2.7 Sync engine** — provider-agnostic: diff (new / changed / missing), bounded-concurrency metadata fetch, respects `userEditedFields`, saves cursor only on success, progress stream, cancellation, idempotent resume, multiple sources.
+  *Done when:* fake-source tests cover nested folders, pagination, cursor resume, deletions, version changes, rate-limit retry, and two sources linked at once.
+- [ ] **P2.8 Sources UI** — Settings *Book Sources* section (link / change folder / unlink per service), in-app folder browser for Dropbox and OneDrive, *Sync Now* with per-source progress, library banner, re-link prompts.
+- [ ] **P2.9 On-demand download** — `DownloadManager` actor; tap-to-download with progress, cancel, atomic move, backup exclusion; *Remove Download*.
 
 ## Phase 3 — Library UI
 
@@ -52,7 +58,7 @@ Each task has an id (`P<phase>.<n>`), a short description, and **Done when** acc
 - [ ] **P3.5 Tap behaviour** — open if downloaded, otherwise download then open.
 - [ ] **P3.6 Long-press menu** — Edit Details sheet (incl. author stored format & custom cover), Add to Collection, Add to Series, Download/Remove Download, Remove from Library.
 - [ ] **P3.7 Empty states & accessibility pass** (Dynamic Type, VoiceOver, dark mode).
-  *Phase done when:* every library item in the concept works end-to-end against the local DB and a linked Drive.
+  *Phase done when:* every library item in the concept works end-to-end against the local DB and at least one linked source of each kind.
 
 ## Phase 4 — Collections, series & settings
 
@@ -81,14 +87,14 @@ Spec: [`READER.md`](READER.md).
 - [ ] **P6.1 Security review** against every item in [`SECURITY_AND_APP_STORE.md`](SECURITY_AND_APP_STORE.md); parser fuzzing; log audit.
 - [ ] **P6.2 Performance** — library with 5 000 books scrolls at 60/120 fps; sync of 1 000 books completes without memory spikes; cold launch < 1 s on recent devices.
 - [ ] **P6.3 Offline behaviour** — downloaded books fully usable in airplane mode; clear messaging for undownloaded ones.
-- [ ] **P6.4 Google OAuth decision** — stay in Testing mode (personal use) **or** submit for verification + CASA assessment (public release). See [`GOOGLE_DRIVE_SYNC.md`](GOOGLE_DRIVE_SYNC.md#scope-choice--important).
+- [ ] **P6.4 Provider approvals** — apply for Dropbox production status; complete Microsoft publisher verification. Both are free. See [`SECURITY_AND_APP_STORE.md`](SECURITY_AND_APP_STORE.md#provider-requirements).
 - [ ] **P6.5 App Store assets** — icon, screenshots (no copyrighted covers), privacy label, privacy policy page, reviewer notes + demo account.
 - [ ] **P6.6 TestFlight beta → App Store submission.**
 
 ## Later / nice-to-have (not in concept, don't build without asking)
-- Background sync (`BGAppRefreshTask`), multiple Drive roots, highlights & notes, iCloud sync of reading positions/bookmarks, per-book reader preferences, iPad layout, widgets, text-to-speech (Readium TTS), OPDS catalogues.
+- Background sync (`BGAppRefreshTask`), multiple root folders per source, cross-source duplicate detection, built-in Google Drive (needs restricted-scope assessment), WebDAV / OPDS servers (Calibre-Web, Kavita), highlights & notes, iCloud sync of reading positions/bookmarks, per-book reader preferences, iPad layout, widgets, text-to-speech (Readium TTS).
 
 ## Open questions for the owner
-1. **Distribution:** personal use only (Testing-mode OAuth, weekly re-link) or public App Store (Google restricted-scope verification + annual CASA assessment)?
-2. **Unlink behaviour default:** keep Drive books' metadata/bookmarks after unlinking, or remove them?
+1. **Distribution:** personal use only, or public App Store? (Public needs Dropbox production approval and Microsoft publisher verification, both free.)
+2. **Unlink behaviour default:** keep a source's books (metadata/bookmarks) after unlinking it, or remove them?
 3. **Bundled fonts:** any specific fonts wanted beyond system serif/sans and an accessibility font?
