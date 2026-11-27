@@ -51,6 +51,7 @@ Mobile-Ereader/
 │  ├─ Persistence/               # GRDB database, migrations, repositories
 │  ├─ EPUBMetadata/              # OPF parsing, cover extraction, RemoteZipReader
 │  ├─ RemoteSources/             # RemoteSource protocol, OAuth/PKCE + Keychain, iCloud/Dropbox/OneDrive adapters, SyncEngine
+│  ├─ RemoteSourcesTesting/      # FakeRemoteSource for tests (never linked into the app)
 │  ├─ BookStorage/               # On-device file management (BookFileStore), downloads
 │  └─ LibraryServices/           # Cross-module workflows: LocalBookImporter (Files / "Open in…"), later sync ingest
 ├─ UITests/                      # XCUITest target (also produces CI screenshots)

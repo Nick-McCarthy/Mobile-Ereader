@@ -36,6 +36,8 @@ let package = Package(
             swiftSettings: strict
         ),
         .target(name: "RemoteSources", dependencies: ["Core"], swiftSettings: strict),
+        // Test doubles (FakeRemoteSource) shared by test targets. Not linked into the app.
+        .target(name: "RemoteSourcesTesting", dependencies: ["Core", "RemoteSources"], swiftSettings: strict),
         .target(name: "BookStorage", dependencies: ["Core"], swiftSettings: strict),
         // Workflows that span modules: importing, and later sync's parse-and-insert.
         .target(
@@ -52,6 +54,11 @@ let package = Package(
         .testTarget(
             name: "EPUBMetadataTests",
             dependencies: ["EPUBMetadata", .product(name: "ReadiumZIPFoundation", package: "ZIPFoundation")],
+            swiftSettings: strict
+        ),
+        .testTarget(
+            name: "RemoteSourcesTests",
+            dependencies: ["RemoteSources", "RemoteSourcesTesting"],
             swiftSettings: strict
         ),
         .testTarget(name: "BookStorageTests", dependencies: ["BookStorage"], swiftSettings: strict),

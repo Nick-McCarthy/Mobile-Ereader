@@ -38,7 +38,7 @@ Each task has an id (`P<phase>.<n>`), a short description, and **Done when** acc
 
 The user can link any combination of the three. Spec: [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md).
 
-- [ ] **P2.1 Source abstraction** — `RemoteSource` protocol, `RemoteFile` / `RemoteChange` / `SyncCursor` types, `library_source` repository, `FakeRemoteSource` for tests.
+- [x] **P2.1 Source abstraction** — `RemoteSource` protocol, `RemoteFile` / `RemoteChange` / `SyncCursor` types, `library_source` repository, `FakeRemoteSource` for tests.
 - [ ] **P2.2 OAuth + Keychain** — shared PKCE flow on `ASWebAuthenticationSession` (state check, code exchange, refresh, revoke), `TokenStore` on the Keychain.
   *Done when:* unit tests cover PKCE generation, state mismatch rejection, refresh-before-expiry, and that tokens never touch UserDefaults or the DB.
 - [ ] **P2.3 Remote ZIP reader** — provider-agnostic `ByteRangeReading` → EOCD / central-directory / entry fetch, inflate, ZIP64 support, full-download fallback.

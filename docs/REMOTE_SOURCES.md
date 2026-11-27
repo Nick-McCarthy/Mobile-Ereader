@@ -24,6 +24,13 @@ protocol RemoteSource: Sendable {
 
 `RemoteFile` holds `remoteId`, `displayPath`, `name`, `size`, `version` (provider-specific change token), `modifiedAt`.
 
+As implemented (P2.1, `RemoteSources/RemoteSource.swift`):
+- `enumerateEPUBs` returns a `RemoteChangeStream` of `RemoteChange`: `.reset`, `.upsert(RemoteFile)`, `.removed(remoteId:)`, `.cursor(SyncCursor)`. Every **full** listing (no cursor, or one the provider rejects, such as a Dropbox `reset` or a Graph `410`) starts with `.reset`. After it, any book of that source not upserted before the final `.cursor` is missing from the source. An incremental listing has no `.reset` and reports deletions as `.removed`. Every listing ends with `.cursor`, which the engine saves only after processing everything.
+- `ByteRangeReading` lives in Core (so `EPUBMetadata` can use it without depending on `RemoteSources`): `func length() async throws -> Int64` and `func read(_ range: Range<Int64>) async throws -> Data`.
+- Errors are `RemoteSourceError`: `.cancelled`, `.needsRelink`, `.rateLimited(retryAfter:)`, `.notFound`.
+- `LinkedAccount(label:)` is what Settings shows after linking. `RemoteFolder.root` (id `""`) is the whole drive.
+- `library_source` rows are read and written through `LibrarySourceRepository` (Persistence): add (one per service; `.local` is refused), change root (clears the cursor), record sync success (cursor, `ok`, time) or failure (status and message; the cursor is kept). Unlinking arrives with P2.10.
+
 - **Linking:** the user can link **any combination** of the three. Each linked source has **one root folder** (a row in `library_source`). *Sync Now* syncs every linked source, each independently.
 - **Identity:** a book is unique per `(sourceId, remoteId)`. The same file in two sources shows up as two books (no cross-source de-duplication in v1).
 
@@ -106,6 +113,6 @@ Triggered by **Sync Now** in Settings (and pull-to-refresh in the library; `BGAp
 The confirmation dialog for *Unlink* states the outcome up front: "N books that aren't downloaded will be removed from your library. M downloaded books will stay. Your files in <service> won't be changed."
 
 ## Testing
-- Each adapter has a fake: `FakeRemoteSource` (configurable tree, pagination, cursors, deletions, 429s, auth expiry) for `SyncEngine` tests.
+- Each adapter has a fake: `FakeRemoteSource` (configurable tree, pagination, cursors, deletions, 429s, auth expiry) for `SyncEngine` tests. It lives in the `RemoteSourcesTesting` package target, which only test targets depend on. Paths double as remote ids; `putFile` / `removeFile` change the tree, and `rateLimitNext`, `expireAuth`, `invalidateCursors`, and `failEnumeration(afterPages:)` inject failures. Its ranged reader counts reads (`rangeReadCount`) for the P2.3 "≤5 reads per book" check.
 - Adapter unit tests decode recorded **sanitised** JSON fixtures of Dropbox and Graph responses. Never hit real APIs in CI. Never commit real tokens or account data.
 - The iCloud adapter is tested against a temporary local directory tree (including fake `.icloud` placeholder names).
