@@ -1,0 +1,5 @@
+# The app is built on macOS; keep LF line endings in the repository and working tree.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.epub binary

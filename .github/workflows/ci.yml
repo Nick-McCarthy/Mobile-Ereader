@@ -1,0 +1,93 @@
+# Build, lint, and test on GitHub's macOS runners. See docs/CI_AND_BUILD.md.
+# Uses no secrets, so it is safe for pull requests from forks. Never switch this to pull_request_target.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Bump these together, deliberately, in their own PR. Check the runner image's
+  # installed Xcodes and simulators: https://github.com/actions/runner-images
+  XCODE_VERSION: "26.3"
+  SIMULATOR: "platform=iOS Simulator,name=iPhone 17,OS=26.2"
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Lint (swift-format)
+        run: xcrun swift-format lint --strict --recursive --parallel App UITests Packages
+
+      - name: Package tests
+        run: swift test --package-path Packages/EreaderKit
+
+      - name: Write Config/Secrets.xcconfig from repository variables
+        env:
+          DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY }}
+          MICROSOFT_CLIENT_ID: ${{ vars.MICROSOFT_CLIENT_ID }}
+        run: |
+          printf 'DROPBOX_APP_KEY = %s\nMICROSOFT_CLIENT_ID = %s\n' \
+            "$DROPBOX_APP_KEY" "$MICROSOFT_CLIENT_ID" > Config/Secrets.xcconfig
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build and run UI tests on the simulator
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Ereader.xcodeproj \
+            -scheme Ereader \
+            -destination "$SIMULATOR" \
+            -resultBundlePath build/Ereader.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            | xcbeautify --renderer github-actions
+
+      - name: Export screenshots
+        if: always()
+        run: |
+          if [ -d build/Ereader.xcresult ]; then
+            mkdir -p build/screenshots
+            xcrun xcresulttool export attachments \
+              --path build/Ereader.xcresult --output-path build/screenshots
+          fi
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screenshots
+          path: build/screenshots
+          if-no-files-found: ignore
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results
+          path: build/Ereader.xcresult
+          if-no-files-found: ignore

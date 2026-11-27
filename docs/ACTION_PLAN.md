@@ -10,8 +10,10 @@ Each task has an id (`P<phase>.<n>`), a short description, and **Done when** acc
 
 > iOS apps must be built with Xcode on macOS. **Decision:** development happens on Windows and every build, test run, and TestFlight upload runs on **GitHub Actions macOS runners**. See [`CI_AND_BUILD.md`](CI_AND_BUILD.md). Because CI is the only build machine, **P0.6 comes before any app code**.
 
-- [ ] **P0.1 Accounts** — Apple Developer Program membership (needed for device testing beyond 7-day free provisioning, TestFlight, App Store); a **Dropbox** app in the App Console (scoped access, Full Dropbox, read-only scopes); a **Microsoft Entra** app registration (personal + work/school accounts, iOS public client). iCloud Drive needs no setup.
-  *Done when:* bundle id (e.g. `com.<you>.ereader`) is registered and the Dropbox app key + Microsoft client id are stored in a local, git-ignored `Config/Secrets.xcconfig`.
+- [x] **P0.1 Bundle identifier** — decided: **`io.github.nick-mccarthy.ereader`**. Used in `project.yml` from the start. Registration is deferred (see P0.1a–c); simulator builds in CI don't need it.
+- [ ] **P0.1a Apple App ID** — *deferred until the first TestFlight build (P6.6).* Register the identifier above as an explicit App ID with the **Data Protection** capability (Complete Until First User Authentication). Needs a paid Apple Developer Program membership.
+- [ ] **P0.1b Dropbox app** — *deferred until P2.5.* App Console: scoped access, Full Dropbox, read-only scopes. Store the app key as the `DROPBOX_APP_KEY` repository variable.
+- [ ] **P0.1c Microsoft Entra app registration** — *deferred until P2.6.* Personal + work/school accounts, iOS public client, redirect `msauth.io.github.nick-mccarthy.ereader://auth`. Store the client id as the `MICROSOFT_CLIENT_ID` repository variable. iCloud Drive needs no setup.
 - [ ] **P0.2 Repo scaffolding** — `.gitignore` (Xcode, SPM, `Secrets.xcconfig`), `.swift-format`, `Config/Secrets.example.xcconfig`, README with build steps.
 - [ ] **P0.3 Xcode project** — SwiftUI app target `Ereader` (iOS 17+, iPhone only, portrait + landscape), local packages `Core`, `Persistence`, `EPUBMetadata`, `RemoteSources`, `BookStorage` per [`ARCHITECTURE.md`](ARCHITECTURE.md#module-layout). Swift 6 strict concurrency on. Defined in XcodeGen `project.yml` (required; `.xcodeproj` git-ignored).
   *Done when:* empty app with three tabs (Library / Collections / Settings) builds in CI; `swift test` passes in every package; a UI-test screenshot of the app shows up in the CI artifact.

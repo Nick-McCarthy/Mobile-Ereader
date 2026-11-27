@@ -1,0 +1,75 @@
+# XcodeGen project definition: the source of truth for Ereader.xcodeproj (which is generated and git-ignored).
+# Docs: docs/CI_AND_BUILD.md. Generate with `xcodegen generate`.
+name: Ereader
+
+options:
+  bundleIdPrefix: io.github.nick-mccarthy
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    TARGETED_DEVICE_FAMILY: "1"
+
+packages:
+  EreaderKit:
+    path: Packages/EreaderKit
+
+targets:
+  Ereader:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    configFiles:
+      Debug: Config/App.xcconfig
+      Release: Config/App.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.nick-mccarthy.ereader
+        PRODUCT_NAME: Ereader
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    dependencies:
+      - package: EreaderKit
+        product: Core
+      - package: EreaderKit
+        product: Persistence
+      - package: EreaderKit
+        product: EPUBMetadata
+      - package: EreaderKit
+        product: RemoteSources
+      - package: EreaderKit
+        product: BookStorage
+
+  EreaderUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.nick-mccarthy.ereader.uitests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Ereader
+
+schemes:
+  Ereader:
+    build:
+      targets:
+        Ereader: all
+        EreaderUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - EreaderUITests

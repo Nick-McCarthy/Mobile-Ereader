@@ -31,7 +31,7 @@ Rejected alternatives (don't revisit without a reason):
 
 ## Module layout
 
-Single app target plus local Swift packages so domain logic is testable without the simulator UI.
+Single app target plus one local Swift package, `EreaderKit`, with one module per domain, so domain logic is testable with `swift test` without the simulator UI.
 
 ```
 Mobile-Ereader/
@@ -45,13 +45,13 @@ Mobile-Ereader/
 │  │  └─ Reader/                 # Readium navigator wrapper + reader chrome + drawers
 │  ├─ Resources/                 # Assets, Localizable.xcstrings, PrivacyInfo.xcprivacy
 │  └─ Info.plist
-├─ Packages/
+├─ Packages/EreaderKit/Sources/ # one package, one target per module:
 │  ├─ Core/                      # Models, AuthorNameFormatter, shared utilities (no UIKit)
 │  ├─ Persistence/               # GRDB database, migrations, repositories
 │  ├─ EPUBMetadata/              # OPF parsing, cover extraction, RemoteZipReader
 │  ├─ RemoteSources/             # RemoteSource protocol, OAuth/PKCE + Keychain, iCloud/Dropbox/OneDrive adapters, SyncEngine
 │  └─ BookStorage/               # On-device file management, downloads, file protection
-├─ AppTests/ AppUITests/
+├─ UITests/                      # XCUITest target (also produces CI screenshots)
 ├─ docs/                         # agent helper files (see /Agents.md)
 ├─ .github/workflows/            # ci.yml, release.yml (see CI_AND_BUILD.md)
 └─ project.yml                   # XcodeGen spec (source of truth for the Xcode project)
