@@ -2,9 +2,11 @@
 # Uses no secrets, so it is safe for pull requests from forks. Never switch this to pull_request_target.
 name: CI
 
+# Pushes to main run CI; other branches are covered by their pull request (one run per update).
+# Use "Run workflow" (workflow_dispatch) to test a branch that has no PR yet.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -12,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 env:

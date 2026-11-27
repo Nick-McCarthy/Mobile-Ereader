@@ -11,6 +11,7 @@
 ## Workflows
 
 ### `.github/workflows/ci.yml` (every push and pull request)
+- Triggers: pushes to `main`, every pull request update, and manual runs (`workflow_dispatch`, for a branch without a PR). Feature-branch pushes don't trigger it on their own, so each PR update runs CI once.
 - `runs-on: macos-15` (**pin** a runner image, not `macos-latest`, so Xcode doesn't change under us). Xcode is pinned to **26.3** (`XCODE_VERSION`), simulator **iPhone 17, iOS 26.2** (`SIMULATOR`). App Store uploads must use a current SDK, so stay on the latest Xcode the image offers. Bump these deliberately in their own PR after checking the runner image's readme.
 - Steps: checkout → (SPM cache, keyed on `Package.resolved`, to be added in P0.4 when there are remote packages) → `brew install xcodegen` → write `Config/Secrets.xcconfig` from **repository variables** (Dropbox app key, Microsoft client id: public identifiers, not secrets) → `xcodegen generate` → `swift-format lint --strict` → `swift test` per package → `xcodebuild test` on the simulator with `CODE_SIGNING_ALLOWED=NO` (simulator builds need no signing) → export UI-test screenshots as PNGs (`xcresulttool export attachments`) → upload the **`screenshots`** and **`test-results`** (`.xcresult`) artifacts, always, including on failure.
 - Fail on Swift warnings: CI passes `SWIFT_TREAT_WARNINGS_AS_ERRORS=YES` on the `xcodebuild` command line, so local experiments aren't blocked.
