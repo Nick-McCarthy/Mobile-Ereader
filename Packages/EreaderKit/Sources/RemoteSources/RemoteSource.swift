@@ -34,7 +34,7 @@ public typealias RemoteChangeStream = AsyncThrowingStream<RemoteChange, any Erro
 
 /// The account shown in Settings after linking. Kept on the device only.
 public struct LinkedAccount: Equatable, Sendable {
-    /// A display name or email, or nil when the provider has none (iCloud Drive / Files).
+    /// A display name or email; for iCloud Drive / Files, the picked folder's name.
     public var label: String?
 
     public init(label: String?) {

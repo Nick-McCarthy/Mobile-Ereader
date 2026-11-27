@@ -94,6 +94,24 @@ As implemented (P2.1, `RemoteSources/RemoteSource.swift`):
 - Metadata needs the bytes locally. For each new or changed item: do a coordinated read (`NSFileCoordinator`, `.withoutChanges`), which makes iCloud fetch the file. Parse it in place with `ReadiumZIPFoundation`, then call `FileManager.evictUbiquitousItem(at:)` if it wasn't downloaded before, to avoid filling the device. Limit to 2 concurrent fetches.
 - "Download" in the library means copying the file into the app's own `Books/remote/` folder (offline-safe, protected, consistent with the other sources).
 
+#### As implemented (P2.4, `RemoteSources/Files`)
+- `FilesRemoteSource(bookmark:picker:)` is an actor.
+  - `link()` asks a `FolderPicking` for a folder. The app supplies the `UIDocumentPickerViewController` implementation with the Settings UI in P2.8.
+  - `link(folderAt:)` keeps a bookmark to the folder. The account label is the folder's name.
+  - The caller saves `bookmark` to `library_source.rootBookmark` after `link`, after each sync (a stale bookmark is re-created in place), and after `unlink` (which only forgets it).
+  - A missing bookmark, one that won't resolve, or a folder that's gone throws `needsRelink`.
+- Every listing is a full one: `.reset`, then every book, then a `files:<time>` cursor.
+  - Ids are paths relative to the picked folder, so listing a sub-folder still gives root-relative ids.
+  - Hidden files and folders and package contents are skipped.
+  - `.Name.epub.icloud` is listed as `Name.epub`. Its size comes from the real item when the system has it, otherwise nil. A real file wins over a leftover placeholder with the same name.
+  - `version` is `<modified ms>-<size>`.
+- Ids containing `.` or `..` are rejected (`notFound`), so a stored id can't reach outside the folder.
+- `byteRangeReader` is nil. Metadata uses `download` to a temporary file instead of parsing in place, because `NSFileCoordinator`'s accessor is synchronous and the parser is async.
+  - `download` does a coordinated `.withoutChanges` read on its own queue and copies the file.
+  - If the file wasn't on the device before, it is evicted again afterwards.
+  - Progress is reported only as 0 and 1.
+- Tests run against a temporary folder tree with placeholder names (`RemoteSourcesTests/FilesRemoteSourceTests`).
+
 ## Folder browser
 - Dropbox and OneDrive: an in-app browser with breadcrumbs, a *This Folder* button, and a *Whole Dropbox/OneDrive* shortcut. Persist the folder id and display path to `library_source`.
 - iCloud Drive / Files: the system folder picker.

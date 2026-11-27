@@ -43,7 +43,7 @@ The user can link any combination of the three. Spec: [`REMOTE_SOURCES.md`](REMO
   *Done when:* unit tests cover PKCE generation, state mismatch rejection, refresh-before-expiry, and that tokens never touch UserDefaults or the DB.
 - [x] **P2.3 Remote ZIP reader** — provider-agnostic `ByteRangeReading` → EOCD / central-directory / entry fetch, inflate, ZIP64 support, full-download fallback.
   *Done when:* reads metadata from fixture EPUBs served by a fake ranged reader in tests, issuing ≤5 reads per book.
-- [ ] **P2.4 iCloud Drive / Files adapter** ∥ — folder picker, bookmark persistence + security-scoped access, enumeration incl. `.icloud` placeholders, coordinated fetch + evict for metadata, copy-to-sandbox download.
+- [x] **P2.4 iCloud Drive / Files adapter** ∥ — folder picker, bookmark persistence + security-scoped access, enumeration incl. `.icloud` placeholders, coordinated fetch + evict for metadata, copy-to-sandbox download.
 - [ ] **P2.5 Dropbox adapter** ∥ — app key config + URL scheme, sign-in, folder browser, recursive `list_folder` with saved cursor (incl. `reset`), ranged and full download.
 - [ ] **P2.6 OneDrive adapter** ∥ — Entra client id config + redirect, sign-in, folder browser, BFS `children` walk (+ `delta` on personal accounts), ranged and full download via pre-authenticated URL.
   *Done when (P2.4–P2.6):* each adapter passes tests against sanitised recorded responses (or a temp directory for iCloud), including pagination, deletions, and auth expiry.
