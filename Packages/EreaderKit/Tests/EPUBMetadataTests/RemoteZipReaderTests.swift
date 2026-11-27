@@ -105,6 +105,67 @@ struct RemoteZipReaderTests {
         }
     }
 
+    // MARK: Hostile archives
+
+    @Test("A lying compressed size for a required entry is refused without a large fetch")
+    func lyingCompressedSizeRequiredEntry() async throws {
+        let bytes = try Self.setCompressedSize(
+            in: try await Self.largeBook(compression: .deflate),
+            entry: "META-INF/container.xml",
+            to: 0x7FFF_FFFF
+        )
+        let reader = CountingReader(bytes)
+        await #expect(throws: EPUBMetadataError.entryTooLarge("META-INF/container.xml")) {
+            _ = try await EPUBMetadataReader.read(remote: reader) { _ in Issue.record("fell back") }
+        }
+        #expect(await reader.largestRequest <= RemoteZipReader.minimumFetch)
+        await #expect(throws: EPUBMetadataError.entryTooLarge("META-INF/container.xml")) {
+            _ = try await Self.parseLocally(bytes)
+        }
+    }
+
+    @Test("A lying compressed size for the cover skips the cover without a large fetch")
+    func lyingCompressedSizeCover() async throws {
+        let bytes = try Self.setCompressedSize(
+            in: try await Self.largeBook(compression: .deflate),
+            entry: "OEBPS/images/cover.png",
+            to: 0x7FFF_FFFF
+        )
+        let reader = CountingReader(bytes)
+        let metadata = try await EPUBMetadataReader.read(remote: reader) { _ in Issue.record("fell back") }
+        #expect(metadata.title == "Remote Title")
+        #expect(metadata.coverThumbnail == nil)
+        #expect(await reader.largestRequest <= RemoteZipReader.minimumFetch)
+    }
+
+    @Test("Fetch hints are capped and range arithmetic can't overflow")
+    func hintsAreCapped() async throws {
+        let length: Int64 = 1 << 40
+        let reader = SyntheticReader(length: length)
+        let cache = RangeCache(reader: reader)
+
+        await cache.setFetchHint(.max)
+        _ = try await cache.bytes(at: 0, count: 1)
+        #expect(await reader.largestRequest == RemoteZipReader.maximumFetch)
+
+        let tail = try await cache.bytes(at: length - 10, count: .max)
+        #expect(tail.count == 10)
+        let beyond = try await cache.bytes(at: .max, count: .max)
+        #expect(beyond.isEmpty)
+    }
+
+    @Test("A negative reported length falls back to a full download")
+    func negativeLengthFallsBack() async throws {
+        let bytes = try await Self.largeBook(compression: .deflate)
+        let downloads = Counter()
+        let metadata = try await EPUBMetadataReader.read(remote: SyntheticReader(length: -1)) { url in
+            await downloads.increment()
+            try bytes.write(to: url)
+        }
+        #expect(metadata.title == "Remote Title")
+        #expect(await downloads.value == 1)
+    }
+
     // MARK: Fixtures
 
     static let package = EPUBFixture.package(
@@ -139,6 +200,25 @@ struct RemoteZipReaderTests {
         let url = directory.appendingPathComponent("book.epub")
         try bytes.write(to: url)
         return try await EPUBMetadataReader.read(fileAt: url)
+    }
+
+    /// Rewrites the compressed-size field of `entry`'s central-directory record.
+    static func setCompressedSize(in zip: Data, entry name: String, to value: UInt32) throws -> Data {
+        var bytes = [UInt8](zip)
+        let signature: [UInt8] = [0x50, 0x4B, 0x01, 0x02]
+        let nameBytes = Array(name.utf8)
+        var index = 0
+        while index + 46 + nameBytes.count <= bytes.count {
+            let nameLength = Int(bytes[index + 28]) | Int(bytes[index + 29]) << 8
+            if Array(bytes[index..<index + 4]) == signature, nameLength == nameBytes.count,
+                Array(bytes[index + 46..<index + 46 + nameLength]) == nameBytes
+            {
+                for byte in 0..<4 { bytes[index + 20 + byte] = UInt8(truncatingIfNeeded: value >> (8 * UInt32(byte))) }
+                return Data(bytes)
+            }
+            index += 1
+        }
+        throw EPUBFixture.FixtureError()
     }
 
     /// Deterministic bytes that deflate can't shrink.
@@ -206,6 +286,7 @@ actor CountingReader: ByteRangeReading {
     private let failOnRead: Int?
     private(set) var readCount = 0
     private(set) var bytesServed = 0
+    private(set) var largestRequest: Int64 = 0
 
     init(_ bytes: Data, ignoresRanges: Bool = false, failOnRead: Int? = nil) {
         self.bytes = bytes
@@ -219,6 +300,7 @@ actor CountingReader: ByteRangeReading {
 
     func read(_ range: Range<Int64>) throws -> Data {
         defer { readCount += 1 }
+        largestRequest = max(largestRequest, range.upperBound - range.lowerBound)
         if readCount == failOnRead { throw TestNetworkError() }
         if ignoresRanges { return bytes }
         let lower = Int(max(range.lowerBound, 0))
@@ -226,6 +308,25 @@ actor CountingReader: ByteRangeReading {
         guard lower < upper else { return Data() }
         bytesServed += upper - lower
         return bytes.subdata(in: lower..<upper)
+    }
+}
+
+/// A file of zeros of any reported `length` (even a nonsensical one), recording the largest request.
+actor SyntheticReader: ByteRangeReading {
+    private let reportedLength: Int64
+    private(set) var largestRequest: Int64 = 0
+
+    init(length: Int64) {
+        reportedLength = length
+    }
+
+    func length() -> Int64 {
+        reportedLength
+    }
+
+    func read(_ range: Range<Int64>) -> Data {
+        largestRequest = max(largestRequest, range.upperBound - range.lowerBound)
+        return Data(count: Int(range.upperBound - range.lowerBound))
     }
 }
 

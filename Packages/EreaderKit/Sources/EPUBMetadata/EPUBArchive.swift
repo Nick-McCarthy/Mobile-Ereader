@@ -51,11 +51,19 @@ actor EPUBArchive {
     }
 
     /// The entry's uncompressed bytes. Throws if it is missing or breaks a limit.
+    ///
+    /// Callers read one entry at a time (`EPUBMetadataReader` awaits each read). `bytesRead` and the remote
+    /// reader's fetch hint rely on that: concurrent reads could pass the total limit or swap hints.
     func data(at path: String) async throws -> Data {
         guard let entry = entry(at: path), entry.type == .file else { throw EPUBMetadataError.missingEntry(path) }
         let allowed = max(min(limits.maxEntryBytes, limits.maxTotalBytes - bytesRead), 0)
         let declared = entry.uncompressedSize
         guard declared <= UInt64(allowed) else { throw EPUBMetadataError.entryTooLarge(path) }
+        // Deflate never grows data by more than a few bytes per block, so a compressed size far above the
+        // uncompressed one is a lie. Checking it bounds what a remote read fetches for this entry.
+        guard entry.compressedSize <= Self.maxCompressedSize(forUncompressed: declared) else {
+            throw EPUBMetadataError.entryTooLarge(path)
+        }
         if declared > Self.ratioCheckThreshold {
             let compressed = max(entry.compressedSize, 1)
             guard declared / compressed <= UInt64(limits.maxCompressionRatio) else {
@@ -76,6 +84,12 @@ actor EPUBArchive {
         let data = await collector.data
         bytesRead += data.count
         return data
+    }
+
+    /// The largest plausible compressed size: stored data is the same size, and deflate adds at most
+    /// 5 bytes per 16 KB block plus a small header. The margin is generous.
+    static func maxCompressedSize(forUncompressed size: UInt64) -> UInt64 {
+        size + size / 100 + 1024
     }
 
     private func entry(at path: String) -> Entry? {

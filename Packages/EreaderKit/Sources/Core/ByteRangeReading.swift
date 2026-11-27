@@ -16,4 +16,6 @@ public enum ByteRangeError: Error, Equatable {
     case rangeNotSupported
     /// Fewer bytes than requested arrived before the end of the file.
     case shortRead
+    /// The reported file length was negative.
+    case invalidLength
 }

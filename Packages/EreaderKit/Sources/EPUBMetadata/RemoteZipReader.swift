@@ -12,6 +12,9 @@ struct RemoteZipReader: DataSource {
     static let minimumFetch: Int64 = 64 * 1024
     /// Room for a local file header's name and extra field, which the central directory doesn't size.
     static let localHeaderSlack: Int64 = 4 * 1024
+    /// No single request asks for more than this, whatever the archive claims. Entries are already capped at
+    /// `EPUBLimits.maxEntryBytes` (10 MB by default) before they are read.
+    static let maximumFetch: Int64 = 16 * 1024 * 1024
 
     let cache: RangeCache
 
@@ -33,8 +36,8 @@ struct RemoteZipReader: DataSource {
 
     /// Tells the reader that the next uncached read starts an entry of `compressedSize` bytes.
     func expectEntry(compressedSize: UInt64) async {
-        let size = Int64(clamping: compressedSize)
-        await cache.setFetchHint(size.addingReportingOverflow(Self.localHeaderSlack).partialValue)
+        let size = min(Int64(clamping: compressedSize), Self.maximumFetch - Self.localHeaderSlack)
+        await cache.setFetchHint(size + Self.localHeaderSlack)
     }
 
     private actor Transaction: DataSourceTransaction {
@@ -86,12 +89,13 @@ actor RangeCache {
     func length() async throws -> Int64 {
         if let cachedLength { return cachedLength }
         let length = try await recording { try await reader.length() }
+        guard length >= 0 else { throw recordFailure(ByteRangeError.invalidLength) }
         cachedLength = length
         return length
     }
 
     func setFetchHint(_ bytes: Int64) {
-        fetchHint = bytes
+        fetchHint = min(max(bytes, 0), RemoteZipReader.maximumFetch)
     }
 
     func prefetchTail() async throws {
@@ -105,13 +109,15 @@ actor RangeCache {
     func bytes(at offset: Int64, count: Int64) async throws -> Data {
         let length = try await length()
         guard offset >= 0, count > 0, offset < length else { return Data() }
-        let wanted = offset..<min(offset + count, length)
+        // `offset < length`, so subtracting first keeps every sum below `length`: no overflow.
+        let remaining = length - offset
+        let wanted = offset..<offset + min(count, remaining)
         if let block = block(covering: wanted) {
             return slice(of: block, wanted)
         }
         let size = max(RemoteZipReader.minimumFetch, wanted.count64, fetchHint)
         fetchHint = 0
-        let block = try await fetch(offset..<min(offset + size, length))
+        let block = try await fetch(offset..<offset + min(size, remaining))
         return slice(of: block, wanted)
     }
 
