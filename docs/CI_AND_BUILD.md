@@ -1,0 +1,33 @@
+# CI & Build (GitHub Actions macOS runners)
+
+> **Decision:** the owner develops on Windows, so **all builds, tests, and signed releases run on GitHub-hosted macOS runners**. There is no local Mac. Nothing is "tested" until CI has run it.
+
+## Consequences for how we work
+- **The Xcode project is generated, never hand-edited.** Use **XcodeGen**: `project.yml` is the source of truth, `*.xcodeproj` is git-ignored, and CI runs `xcodegen generate` first. (A `.pbxproj` can't be edited reliably without Xcode.) XcodeGen is a build tool, not an app dependency, so it's installed in CI with `brew install xcodegen`.
+- **Pure-Swift packages** (`Core`, `EPUBMetadata`, `Persistence`, `RemoteSources` logic) should stay free of UIKit where practical, so most tests run with `swift test` and fail fast.
+- **Feedback loop:** push a branch, then read the workflow result. UI tests attach screenshots to the `.xcresult` bundle, which is uploaded as a workflow artifact so you can see what the app looked like without a Mac.
+- **Testing on a real iPhone** happens through **TestFlight** builds uploaded by the release workflow. Install the TestFlight app on the phone.
+
+## Workflows
+
+### `.github/workflows/ci.yml` (every push and pull request)
+- `runs-on: macos-15` (**pin** a runner image, not `macos-latest`, so Xcode doesn't change under us). Select Xcode explicitly: `sudo xcode-select -s /Applications/Xcode_<version>.app`. Bump both deliberately in their own PR.
+- Steps: checkout → cache SPM (`~/Library/Caches/org.swift.swiftpm`, `.build`, keyed on `Package.resolved`) → `brew install xcodegen` → write `Config/Secrets.xcconfig` from **repository variables** (Dropbox app key, Microsoft client id: public identifiers, not secrets) → `xcodegen generate` → `swift-format lint --strict` → `swift test` per package → `xcodebuild build-for-testing` + `test-without-building` on an iPhone simulator → upload `.xcresult` as an artifact (always, including on failure).
+- Fail on warnings in the app target (`SWIFT_TREAT_WARNINGS_AS_ERRORS = YES` in `project.yml` for CI builds).
+- `permissions: contents: read`. Uses **no secrets**, so it is safe for pull requests from forks.
+- `concurrency` group per branch with `cancel-in-progress: true` to save runner minutes.
+
+### `.github/workflows/release.yml` (manual `workflow_dispatch` or `v*` tags on `main` only)
+- Archives, signs, and uploads to TestFlight / App Store Connect.
+- Signing material stored as **GitHub encrypted secrets** in a protected `release` **environment** (required reviewer = owner): distribution certificate (`.p12`, base64) + its password, provisioning profile (base64), and an **App Store Connect API key** (`.p8`, key id, issuer id).
+- Import into a temporary keychain created for the job, and delete it in an `if: always()` step. Never `echo` secrets; never upload them as artifacts.
+- Build: `xcodebuild archive` → `xcodebuild -exportArchive` with an `ExportOptions.plist` (method `app-store`) → upload with the App Store Connect API key (`xcrun altool --upload-app` or Apple's Transporter CLI; confirm which Apple currently recommends when implementing P6.6). Auto-increment `CURRENT_PROJECT_VERSION` from `github.run_number`.
+
+## Security rules for a public repository
+- Never use the `pull_request_target` trigger, and never expose secrets to workflows that build untrusted PR code.
+- Pin third-party actions to a full commit SHA (not a tag), and keep them to the essentials (`actions/checkout`, `actions/cache`, `actions/upload-artifact`).
+- `GITHUB_TOKEN` permissions are read-only by default. Grant more per job only when needed.
+- Enable Dependabot for GitHub Actions and SPM version updates.
+
+## Cost
+GitHub-hosted runners are free for public repositories on standard runners. If the repo becomes private, macOS minutes are billed at a much higher rate than Linux ones. Check current pricing and keep `cancel-in-progress` and caching on. Verify the current policy before relying on it.
