@@ -31,7 +31,7 @@ Each task has an id (`P<phase>.<n>`), a short description, and **Done when** acc
   *Done when:* fixture tests cover EPUB 2, EPUB 3, missing fields, each cover-discovery strategy, and malformed archives (no crash).
 - [x] **P1.4 Author name normalisation** ∥ — stored-format detection, component parsing, `AuthorNameFormatter` with the three display modes.
   *Done when:* the tricky-names fixture table in `EPUB_METADATA.md` passes.
-- [ ] **P1.5 Local import** — Files-app import (`.fileImporter` for `.epub`) and "Open in…" handling (`CFBundleDocumentTypes` for `org.idpf.epub-container`); copy into `Books/local/`, parse, insert.
+- [x] **P1.5 Local import** — Files-app import (`.fileImporter` for `.epub`) and "Open in…" handling (`CFBundleDocumentTypes` for `org.idpf.epub-container`); copy into `Books/local/`, parse, insert.
   *Done when:* importing a fixture EPUB shows it in the DB with cover and metadata. This gives a usable app before any cloud source exists (also useful for App Review).
 
 ## Phase 2 — Book sources (iCloud Drive, Dropbox, OneDrive) & sync

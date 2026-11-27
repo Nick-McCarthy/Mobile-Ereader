@@ -2,9 +2,36 @@ import SwiftUI
 
 @main
 struct EreaderApp: App {
+    @State private var environment: AppEnvironment?
+    @State private var importController: BookImportController?
+
+    init() {
+        do {
+            let environment = try AppEnvironment.live()
+            _environment = State(initialValue: environment)
+            _importController = State(initialValue: BookImportController(importer: environment.importer))
+        } catch {
+            // Leaves both nil, so the body shows the "Can't Open Library" message.
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
-            RootView()
+            if let environment, let importController {
+                RootView()
+                    .environment(\.appEnvironment, environment)
+                    .environment(importController)
+                    // "Open in…" and Files-app taps on an EPUB (CFBundleDocumentTypes in Info.plist).
+                    .onOpenURL { url in
+                        Task { await importController.importBooks([url]) }
+                    }
+            } else {
+                ContentUnavailableView(
+                    "Can't Open Library",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text("The library database couldn't be opened. Restart the app to try again.")
+                )
+            }
         }
     }
 }

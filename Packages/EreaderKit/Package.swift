@@ -15,6 +15,7 @@ let package = Package(
         .library(name: "EPUBMetadata", targets: ["EPUBMetadata"]),
         .library(name: "RemoteSources", targets: ["RemoteSources"]),
         .library(name: "BookStorage", targets: ["BookStorage"]),
+        .library(name: "LibraryServices", targets: ["LibraryServices"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "7.12.0"),
@@ -36,6 +37,12 @@ let package = Package(
         ),
         .target(name: "RemoteSources", dependencies: ["Core"], swiftSettings: strict),
         .target(name: "BookStorage", dependencies: ["Core"], swiftSettings: strict),
+        // Workflows that span modules: importing, and later sync's parse-and-insert.
+        .target(
+            name: "LibraryServices",
+            dependencies: ["Core", "Persistence", "EPUBMetadata", "BookStorage"],
+            swiftSettings: strict
+        ),
         .testTarget(name: "CoreTests", dependencies: ["Core"], swiftSettings: strict),
         .testTarget(
             name: "PersistenceTests",
@@ -45,6 +52,15 @@ let package = Package(
         .testTarget(
             name: "EPUBMetadataTests",
             dependencies: ["EPUBMetadata", .product(name: "ReadiumZIPFoundation", package: "ZIPFoundation")],
+            swiftSettings: strict
+        ),
+        .testTarget(name: "BookStorageTests", dependencies: ["BookStorage"], swiftSettings: strict),
+        .testTarget(
+            name: "LibraryServicesTests",
+            dependencies: [
+                "LibraryServices", "Persistence", "BookStorage",
+                .product(name: "ReadiumZIPFoundation", package: "ZIPFoundation"),
+            ],
             swiftSettings: strict
         ),
     ]
