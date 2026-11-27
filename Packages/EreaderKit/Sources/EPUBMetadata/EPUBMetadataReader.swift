@@ -10,6 +10,43 @@ public enum EPUBMetadataReader {
         return try await read(archive, limits: limits)
     }
 
+    /// Reads the metadata of a remote EPUB through ranged reads, usually in 3–5 requests.
+    ///
+    /// If the server ignores ranges, or the archive can't be read remotely, `fallbackDownload` is asked to
+    /// write the whole file to the temporary URL it is given; that copy is parsed and then deleted.
+    /// Errors from `reader` (other than `ByteRangeError`) are rethrown as they are, so callers can see
+    /// `RemoteSourceError.needsRelink`, rate limits, and network failures; they don't trigger the fallback.
+    public static func read(
+        remote reader: any ByteRangeReading,
+        limits: EPUBLimits = .standard,
+        fallbackDownload: (URL) async throws -> Void
+    ) async throws -> EPUBMetadata {
+        let source = RemoteZipReader(reader: reader)
+        do {
+            let archive = try await EPUBArchive(remote: source, limits: limits)
+            let metadata = try await read(archive, limits: limits)
+            // A failed read can also hide inside a skipped cover, so success counts only if none failed.
+            if await source.cache.readerError == nil { return metadata }
+        } catch EPUBMetadataError.unreadableArchive {
+            // Unreadable remotely: a reader error is rethrown below, otherwise the full file is tried.
+        } catch is ByteRangeError {
+            // Ranged reads don't work for this file: fall back below.
+        }
+        if let readerError = await source.cache.readerError, !(readerError is ByteRangeError) {
+            throw readerError
+        }
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "metadata-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("book.epub")
+        try await fallbackDownload(file)
+        return try await read(fileAt: file, limits: limits)
+    }
+
     static func read(_ archive: EPUBArchive, limits: EPUBLimits) async throws -> EPUBMetadata {
         let packagePath = try await packageDocumentPath(in: archive, limits: limits)
         let packageData = try await archive.data(at: packagePath)

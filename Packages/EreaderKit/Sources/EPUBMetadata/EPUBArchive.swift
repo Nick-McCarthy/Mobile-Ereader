@@ -10,13 +10,27 @@ actor EPUBArchive {
     /// Lower-cased paths, for books whose links don't match the archive's capitalisation.
     private let caseInsensitiveEntries: [String: Entry]
     private let limits: EPUBLimits
+    /// Set when the archive is read through ranged requests; told each entry's size before it is read.
+    private let remote: RemoteZipReader?
     private var bytesRead = 0
 
     init(fileURL: URL, limits: EPUBLimits) async throws {
+        try await self.init(limits: limits, remote: nil) { try await Archive(url: fileURL, accessMode: .read) }
+    }
+
+    init(remote: RemoteZipReader, limits: EPUBLimits) async throws {
+        try await self.init(limits: limits, remote: remote) { try await Archive(url: nil, dataSource: remote) }
+    }
+
+    private init(
+        limits: EPUBLimits,
+        remote: RemoteZipReader?,
+        open: () async throws -> Archive
+    ) async throws {
         let archive: Archive
         let entries: [Entry]
         do {
-            archive = try await Archive(url: fileURL, accessMode: .read)
+            archive = try await open()
             entries = try await archive.entries()
         } catch {
             throw EPUBMetadataError.unreadableArchive
@@ -24,6 +38,7 @@ actor EPUBArchive {
         guard entries.count <= limits.maxEntryCount else { throw EPUBMetadataError.tooManyEntries }
         self.archive = archive
         self.limits = limits
+        self.remote = remote
         self.entries = Dictionary(entries.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
         self.caseInsensitiveEntries = Dictionary(
             entries.map { ($0.path.lowercased(), $0) },
@@ -50,6 +65,7 @@ actor EPUBArchive {
 
         // Declared sizes can lie, so the collector also stops once the real output passes the limit.
         let collector = ByteCollector(limit: allowed)
+        await remote?.expectEntry(compressedSize: entry.compressedSize)
         do {
             _ = try await archive.extract(entry) { chunk in try await collector.append(chunk) }
         } catch is ByteCollector.LimitExceeded {

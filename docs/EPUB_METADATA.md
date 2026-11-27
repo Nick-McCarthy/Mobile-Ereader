@@ -25,6 +25,20 @@ Applies to **Dropbox and OneDrive** (iCloud files are read locally after a coord
 3. For each needed entry (`container.xml`, the OPF, the cover image) fetch `offset … offset + 30 + nameLen + extraLen + compressedSize` (read the local header first to get the exact lengths), then inflate (`method 8` → raw DEFLATE via `Compression`/zlib; `method 0` → stored).
 Typical cost: 3–5 small requests per book instead of the full file. **Fallback:** if the server ignores `Range` (returns 200 with full body) or the archive is malformed, download the whole file to a temp location, parse locally, and discard it unless the user downloads the book.
 
+### As implemented (P2.3)
+- `EPUBMetadataReader.read(remote:limits:fallbackDownload:)` takes any `ByteRangeReading` and gives the same result as a local parse, with the same `EPUBLimits`.
+- `RemoteZipReader` (a `DataSource`) and its `RangeCache` work like this:
+  - Opening fetches the last 64 KB.
+  - `EPUBArchive` calls `expectEntry(compressedSize:)` before each entry, so the next fetch covers the entry plus 4 KB for its local header. Every fetch is at least 64 KB.
+  - Fetched blocks are reused, capped at 32 MB.
+  - Tests check that a ~600 KB book takes at most 5 reads, a small book takes 1, and ZIP64 end records work.
+- When the fallback is used:
+  - A reply longer than the requested range throws `ByteRangeError.rangeNotSupported` (Core), and the fallback runs.
+  - So does a remote archive that can't be opened (`unreadableArchive`) when the reader itself never failed.
+  - The fallback writes the whole file to a temporary directory. It is parsed there and then deleted.
+- Errors from the reader itself (network failures, `needsRelink`, rate limits) are rethrown and never trigger the fallback. That includes a failure while reading the cover, so a transient error doesn't save a book without its cover.
+- Limit errors (`tooManyEntries`, `entryTooLarge`, `malformedXML`) are thrown straight away, since the full file would fail the same way.
+
 Local files (imports, already-downloaded books, and iCloud/Files items) are parsed with `ReadiumZIPFoundation` (file data source) or Readium's `Publication` API.
 
 ## Implementation (`EPUBMetadata` module)

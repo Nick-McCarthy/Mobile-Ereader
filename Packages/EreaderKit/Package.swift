@@ -53,7 +53,7 @@ let package = Package(
         ),
         .testTarget(
             name: "EPUBMetadataTests",
-            dependencies: ["EPUBMetadata", .product(name: "ReadiumZIPFoundation", package: "ZIPFoundation")],
+            dependencies: ["Core", "EPUBMetadata", .product(name: "ReadiumZIPFoundation", package: "ZIPFoundation")],
             swiftSettings: strict
         ),
         .testTarget(

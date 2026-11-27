@@ -41,7 +41,7 @@ The user can link any combination of the three. Spec: [`REMOTE_SOURCES.md`](REMO
 - [x] **P2.1 Source abstraction** — `RemoteSource` protocol, `RemoteFile` / `RemoteChange` / `SyncCursor` types, `library_source` repository, `FakeRemoteSource` for tests.
 - [x] **P2.2 OAuth + Keychain** — shared PKCE flow on `ASWebAuthenticationSession` (state check, code exchange, refresh, revoke), `TokenStore` on the Keychain.
   *Done when:* unit tests cover PKCE generation, state mismatch rejection, refresh-before-expiry, and that tokens never touch UserDefaults or the DB.
-- [ ] **P2.3 Remote ZIP reader** — provider-agnostic `ByteRangeReading` → EOCD / central-directory / entry fetch, inflate, ZIP64 support, full-download fallback.
+- [x] **P2.3 Remote ZIP reader** — provider-agnostic `ByteRangeReading` → EOCD / central-directory / entry fetch, inflate, ZIP64 support, full-download fallback.
   *Done when:* reads metadata from fixture EPUBs served by a fake ranged reader in tests, issuing ≤5 reads per book.
 - [ ] **P2.4 iCloud Drive / Files adapter** ∥ — folder picker, bookmark persistence + security-scoped access, enumeration incl. `.icloud` placeholders, coordinated fetch + evict for metadata, copy-to-sandbox download.
 - [ ] **P2.5 Dropbox adapter** ∥ — app key config + URL scheme, sign-in, folder browser, recursive `list_folder` with saved cursor (incl. `reset`), ranged and full download.

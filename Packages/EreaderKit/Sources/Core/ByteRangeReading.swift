@@ -9,3 +9,11 @@ public protocol ByteRangeReading: Sendable {
     /// The bytes in `range`. May return fewer bytes only at the end of the file.
     func read(_ range: Range<Int64>) async throws -> Data
 }
+
+/// Failures of a `ByteRangeReading` that mean ranged reads can't be used for this file.
+public enum ByteRangeError: Error, Equatable {
+    /// The server ignored the range and sent the whole file.
+    case rangeNotSupported
+    /// Fewer bytes than requested arrived before the end of the file.
+    case shortRead
+}
