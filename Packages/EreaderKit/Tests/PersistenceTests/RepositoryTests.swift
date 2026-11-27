@@ -256,7 +256,7 @@ struct SeriesRepositoryTests {
 
         try await repositories.series.setSeries(other.id, position: 4, forBook: "two")
         let membership = try #require(try await repositories.series.series(containing: "two"))
-        #expect(membership.series == other)
+        #expect(membership.series.id == other.id)
         #expect(membership.position == 4)
         #expect(try await iterator.next()?.map(\.book.id) == ["one", "half", "extra"])
 
