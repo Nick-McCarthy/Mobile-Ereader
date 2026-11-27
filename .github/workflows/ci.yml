@@ -85,14 +85,23 @@ jobs:
           echo "PKG_FLAGS=$PKG_FLAGS" >> "$GITHUB_ENV"
           xcodebuild -resolvePackageDependencies -project Ereader.xcodeproj -scheme Ereader \
             -clonedSourcePackagesDirPath build/SourcePackages $PKG_FLAGS
-          echo "Package.resolved files after resolution:"
-          find . -name Package.resolved -not -path "*/checkouts/*" -not -path "*/.build/*" -print
-          find Ereader.xcodeproj -print
-          find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 4 -name Package.resolved -print || true
-          ls -la build/SourcePackages || true
           # Collect both resolved files so they can be committed (bootstrap) or reviewed.
           mkdir -p build/resolved/Config build/resolved/Packages/EreaderKit
-          cp "$RESOLVED" build/resolved/Config/Package.resolved
+          if [ -f "$RESOLVED" ]; then
+            cp "$RESOLVED" build/resolved/Config/Package.resolved
+          else
+            # xcodebuild doesn't write the project's Package.resolved here, so build one from SwiftPM's state.
+            jq '{
+                pins: [.object.dependencies[]
+                  | select(.packageRef.kind == "remoteSourceControl")
+                  | {identity: .packageRef.identity, kind: "remoteSourceControl", location: .packageRef.location,
+                     state: {revision: .state.checkoutState.revision, version: .state.checkoutState.version}}]
+                  | sort_by(.identity),
+                version: 2
+              }' build/SourcePackages/workspace-state.json > build/resolved/Config/Package.resolved
+          fi
+          echo "Resolved app package versions:"
+          jq -r '.pins[] | "  \(.identity) \(.state.version // .state.revision)"' build/resolved/Config/Package.resolved
           cp Packages/EreaderKit/Package.resolved build/resolved/Packages/EreaderKit/Package.resolved
 
       - name: Upload resolved package versions
