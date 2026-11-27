@@ -14,7 +14,7 @@ Requirements source: [`/Concept.md`](../Concept.md). Delivery order: [`ACTION_PL
 | Cloud auth (Dropbox, OneDrive) | **OAuth 2.0 + PKCE via `ASWebAuthenticationSession`**, tokens in the Keychain | One small shared implementation instead of two vendor SDKs (SwiftyDropbox, MSAL). |
 | Cloud APIs | **Dropbox API v2 and Microsoft Graph v1.0 over `URLSession`** (thin hand-written clients) | We only need folder listing, change cursors, and (ranged) downloads. |
 | iCloud Drive access | `UIDocumentPickerViewController` folder pick + bookmark, `FileManager` / `NSFileCoordinator` | No iCloud entitlement or container needed; also works with any other file provider app. |
-| EPUB metadata (sync-time) | **[ZIPFoundation](https://github.com/weichsel/ZIPFoundation)** for local and iCloud files, plus a small custom **remote ZIP reader** (HTTP range requests) for Dropbox and OneDrive | Lets us read title/author/date/cover *without* downloading whole books. See [`EPUB_METADATA.md`](EPUB_METADATA.md). |
+| EPUB metadata (sync-time) | **[Readium's ZIPFoundation fork](https://github.com/readium/ZIPFoundation) (`ReadiumZIPFoundation`)** for every ZIP read. Local and iCloud files use its file data source; Dropbox and OneDrive use a custom `DataSource` backed by HTTP range requests (`RemoteZipReader`) | Lets us read title/author/date/cover *without* downloading whole books. See [`EPUB_METADATA.md`](EPUB_METADATA.md). |
 | XML parsing | Foundation `XMLParser` (or Readium's parser when the file is local) | No extra dependency. |
 | Image cache | Covers written to disk as downscaled JPEG/HEIC thumbnails; loaded via a small in-memory `NSCache` | Keeps the DB small, list/grid scrolling smooth. |
 | Project generation | **XcodeGen** `project.yml` (required); `.xcodeproj` is generated and git-ignored | There is no local Mac, so the project must be editable as text and generated in CI. See [`CI_AND_BUILD.md`](CI_AND_BUILD.md). |
@@ -25,6 +25,7 @@ Rejected alternatives (don't revisit without a reason):
 - **React Native / Flutter** – EPUB rendering would still need a native WebView-based engine, plus bridging; adds attack surface and review risk with no benefit for an iPhone-only app.
 - **SwiftData** – viable, but weaker migration story and no built-in FTS; GRDB is more predictable.
 - **Google Drive as a built-in source**: its `drive.readonly` scope is restricted (Google verification + annual paid CASA assessment for public release). Google Drive users can use the iCloud Drive / Files picker via the Google Drive app.
+- **weichsel/ZIPFoundation**: has the same package identity (`zipfoundation`) as the fork Readium depends on, so SwiftPM can't resolve both. The fork also adds the async, pluggable `DataSource` API the remote reader needs.
 - **SwiftyDropbox / MSAL**: large SDKs for what is a standard PKCE flow plus a few REST calls.
 - **FolioReaderKit** – unmaintained.
 - **Building our own renderer on WKWebView** – reinvents pagination, CSS injection, locators; Readium already solves it.

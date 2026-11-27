@@ -67,7 +67,7 @@ protocol RemoteSource: Sendable {
 - Persist access with a **bookmark** (`url.bookmarkData()`), stored as a BLOB in `library_source.rootBookmark`. On every use: resolve it, call `startAccessingSecurityScopedResource()`, and stop when done. If the bookmark is stale, re-create it; if it fails to resolve, mark the source *needs re-link*.
 - Enumerate with `FileManager.enumerator(at:includingPropertiesForKeys:)` requesting `.contentModificationDateKey`, `.fileSizeKey`, `.ubiquitousItemDownloadingStatusKey`, `.isDirectoryKey`. Not-yet-downloaded iCloud items may appear as hidden placeholders named `.<name>.epub.icloud`, so map those back to the real name.
 - `remoteId` = path relative to the root, so a rename looks like remove + add. That's acceptable: reading data is matched by the `isMissingFromSource` flow and the user can merge in a later version.
-- Metadata needs the bytes locally. For each new or changed item: do a coordinated read (`NSFileCoordinator`, `.withoutChanges`), which makes iCloud fetch the file. Parse it in place with ZIPFoundation, then call `FileManager.evictUbiquitousItem(at:)` if it wasn't downloaded before, to avoid filling the device. Limit to 2 concurrent fetches.
+- Metadata needs the bytes locally. For each new or changed item: do a coordinated read (`NSFileCoordinator`, `.withoutChanges`), which makes iCloud fetch the file. Parse it in place with `ReadiumZIPFoundation`, then call `FileManager.evictUbiquitousItem(at:)` if it wasn't downloaded before, to avoid filling the device. Limit to 2 concurrent fetches.
 - "Download" in the library means copying the file into the app's own `Books/remote/` folder (offline-safe, protected, consistent with the other sources).
 
 ## Folder browser

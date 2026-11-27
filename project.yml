@@ -17,10 +17,16 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     TARGETED_DEVICE_FAMILY: "1"
+    # Our targets only. Third-party packages are built with warnings suppressed by Xcode.
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
 
 packages:
   EreaderKit:
     path: Packages/EreaderKit
+  # Pinned exactly; transitive dependencies are pinned by Packages/EreaderKit/Package.resolved (see docs/CI_AND_BUILD.md).
+  Readium:
+    url: https://github.com/readium/swift-toolkit.git
+    exactVersion: 3.11.1
 
 targets:
   Ereader:
@@ -37,6 +43,7 @@ targets:
         PRODUCT_NAME: Ereader
         INFOPLIST_FILE: App/Info.plist
         GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: App/Ereader.entitlements
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     dependencies:
@@ -50,6 +57,12 @@ targets:
         product: RemoteSources
       - package: EreaderKit
         product: BookStorage
+      - package: Readium
+        product: ReadiumShared
+      - package: Readium
+        product: ReadiumStreamer
+      - package: Readium
+        product: ReadiumNavigator
 
   EreaderUITests:
     type: bundle.ui-testing

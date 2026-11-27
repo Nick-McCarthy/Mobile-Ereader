@@ -19,13 +19,13 @@ Fields required by the concept: **title, author, publication date, cover**. Any 
    Downscale to max 600 px on the long edge, encode JPEG q≈0.8, save to `Caches/Covers/<bookId>.jpg`. Resolve hrefs relative to the OPF's directory and percent-decode them.
 
 ## Reading metadata without downloading the book
-Applies to **Dropbox and OneDrive** (iCloud files are read locally after a coordinated fetch, see [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#icloud-drive--files-specifics)). An EPUB is a ZIP, and both providers' download endpoints honour HTTP `Range` headers. Each adapter exposes a `ByteRangeReading` (`func read(_ range: Range<Int64>) async throws -> Data`, `var length: Int64`), so the provider-agnostic `RemoteZipReader` can:
+Applies to **Dropbox and OneDrive** (iCloud files are read locally after a coordinated fetch, see [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#icloud-drive--files-specifics)). An EPUB is a ZIP, and both providers' download endpoints honour HTTP `Range` headers. Each adapter exposes a `ByteRangeReading` (`func read(_ range: Range<Int64>) async throws -> Data`, `var length: Int64`), and `RemoteZipReader` wraps it in a `ReadiumZIPFoundation.DataSource` (`length()` + read transactions that `seek`/`read` through ranged GETs, with a small read-ahead buffer). `Archive(url: nil, dataSource:)` then does the ZIP work. Under the hood that means:
 1. `GET` the last ~64 KB (`Range: bytes=-65536`) → locate the End-Of-Central-Directory record (and ZIP64 locator if present).
 2. Fetch the central directory (if not already inside that tail) → map of entry name → local header offset, compressed size, method.
 3. For each needed entry (`container.xml`, the OPF, the cover image) fetch `offset … offset + 30 + nameLen + extraLen + compressedSize` (read the local header first to get the exact lengths), then inflate (`method 8` → raw DEFLATE via `Compression`/zlib; `method 0` → stored).
 Typical cost: 3–5 small requests per book instead of the full file. **Fallback:** if the server ignores `Range` (returns 200 with full body) or the archive is malformed, download the whole file to a temp location, parse locally, and discard it unless the user downloads the book.
 
-Local files (imports, already-downloaded books, and iCloud/Files items) are parsed with ZIPFoundation or Readium's `Publication` API.
+Local files (imports, already-downloaded books, and iCloud/Files items) are parsed with `ReadiumZIPFoundation` (file data source) or Readium's `Publication` API.
 
 ## Security of untrusted archives
 EPUBs are untrusted input.

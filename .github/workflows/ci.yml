@@ -43,8 +43,27 @@ jobs:
       - name: Lint (swift-format)
         run: xcrun swift-format lint --strict --recursive --parallel App UITests Packages
 
+      - name: Compliance checks (source)
+        run: scripts/check-compliance.sh
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            Packages/EreaderKit/.build
+            build/SourcePackages
+          key: spm-xcode${{ env.XCODE_VERSION }}-${{ hashFiles('Packages/EreaderKit/Package.swift', 'Packages/EreaderKit/Package.resolved', 'project.yml') }}
+          restore-keys: spm-xcode${{ env.XCODE_VERSION }}-
+
+      # Pinning: Packages/EreaderKit/Package.resolved pins the whole graph, app included. Xcode reads and writes the
+      # local package's file for this project. When it's committed, builds may only use those exact versions.
       - name: Package tests
-        run: swift test --package-path Packages/EreaderKit
+        run: |
+          ARGS=()
+          if git ls-files --error-unmatch Packages/EreaderKit/Package.resolved > /dev/null 2>&1; then
+            ARGS+=(--force-resolved-versions)
+          fi
+          swift test --package-path Packages/EreaderKit "${ARGS[@]}"
 
       - name: Write Config/Secrets.xcconfig from repository variables
         env:
@@ -57,6 +76,30 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Resolve app packages
+        run: |
+          PKG_FLAGS=""
+          if git ls-files --error-unmatch Packages/EreaderKit/Package.resolved > /dev/null 2>&1; then
+            git checkout -- Packages/EreaderKit/Package.resolved   # undo any rewrite by swift test
+            PKG_FLAGS="-onlyUsePackageVersionsFromResolvedFile -disableAutomaticPackageResolution"
+          fi
+          echo "PKG_FLAGS=$PKG_FLAGS" >> "$GITHUB_ENV"
+          xcodebuild -resolvePackageDependencies -project Ereader.xcodeproj -scheme Ereader \
+            -clonedSourcePackagesDirPath build/SourcePackages $PKG_FLAGS
+          echo "Resolved package versions:"
+          jq -r '.pins[] | "  \(.identity) \(.state.version // .state.revision)"' Packages/EreaderKit/Package.resolved
+          # Collect the resolved file so it can be committed (bootstrap) or reviewed.
+          mkdir -p build/resolved
+          cp Packages/EreaderKit/Package.resolved build/resolved/Package.resolved
+
+      - name: Upload resolved package versions
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-resolved
+          path: build/resolved
+          if-no-files-found: ignore
+
       - name: Build and run UI tests on the simulator
         run: |
           set -o pipefail
@@ -65,9 +108,14 @@ jobs:
             -scheme Ereader \
             -destination "$SIMULATOR" \
             -resultBundlePath build/Ereader.xcresult \
+            -derivedDataPath build/DerivedData \
+            -clonedSourcePackagesDirPath build/SourcePackages \
+            $PKG_FLAGS \
             CODE_SIGNING_ALLOWED=NO \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             | xcbeautify --renderer github-actions
+
+      - name: Compliance checks (built app)
+        run: scripts/check-compliance.sh build/DerivedData/Build/Products/Debug-iphonesimulator/Ereader.app
 
       - name: Export screenshots
         if: always()
@@ -98,3 +146,15 @@ jobs:
           name: test-results
           path: build/Ereader.xcresult
           if-no-files-found: ignore
+
+      - name: Require committed Package.resolved
+        run: |
+          missing=0
+          for f in Packages/EreaderKit/Package.resolved; do
+            # Check git, not the disk: swift test writes the package's file during the run.
+            if ! git ls-files --error-unmatch "$f" > /dev/null 2>&1; then
+              echo "::error file=$f::$f is not committed. Download the package-resolved artifact from this run and commit it as $f."
+              missing=1
+            fi
+          done
+          exit $missing

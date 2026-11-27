@@ -48,4 +48,4 @@ Grouped `Form`:
   - *Manage Collections* / *Manage Series* → lists with rename/delete.
 - **Reading defaults** — default font, size, page colour (reader drawer edits per-session values; these are the starting defaults).
 - **Storage** — space used by downloads, *Remove All Downloads* (its confirmation says how many detached books will also be removed from the library).
-- **About & Privacy** — version, privacy policy link, open-source licences (acknowledgements for Readium, GRDB, ZIPFoundation), *Delete All App Data*.
+- **About & Privacy** — version, privacy policy link, open-source licences (acknowledgements for Readium and its dependencies, GRDB, ZIPFoundation), *Delete All App Data*.
