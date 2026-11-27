@@ -27,7 +27,7 @@ Each task has an id (`P<phase>.<n>`), a short description, and **Done when** acc
 - [x] **P1.1 Database & migrations** — GRDB `DatabaseQueue` in Application Support with file protection; migration v1 creating all tables in [`DATA_MODEL.md`](DATA_MODEL.md) incl. FTS5 + triggers.
   *Done when:* migration unit tests pass on an in-memory DB; FTS search returns rows by title and author.
 - [x] **P1.2 Repositories** ∥ — `BookRepository`, `CollectionRepository`, `SeriesRepository`, `BookmarkRepository`, `ReadingPositionRepository` with async `observe…` APIs.
-- [ ] **P1.3 EPUB metadata parser** ∥ — OPF parsing (title, authors + roles + file-as, date, series, cover href) per [`EPUB_METADATA.md`](EPUB_METADATA.md); placeholders for missing fields; cover thumbnail generation; hardening limits.
+- [x] **P1.3 EPUB metadata parser** ∥ — OPF parsing (title, authors + roles + file-as, date, series, cover href) per [`EPUB_METADATA.md`](EPUB_METADATA.md); placeholders for missing fields; cover thumbnail generation; hardening limits.
   *Done when:* fixture tests cover EPUB 2, EPUB 3, missing fields, each cover-discovery strategy, and malformed archives (no crash).
 - [ ] **P1.4 Author name normalisation** ∥ — stored-format detection, component parsing, `AuthorNameFormatter` with the three display modes.
   *Done when:* the tricky-names fixture table in `EPUB_METADATA.md` passes.
