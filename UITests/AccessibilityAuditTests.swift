@@ -28,8 +28,9 @@ final class AccessibilityAuditTests: XCTestCase {
     private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit { issue in
             let element = issue.element.map { "\($0.elementType.rawValue) \"\($0.label)\" \($0.frame)" } ?? "no element"
-            print("Accessibility issue: \(issue.compactDescription) on \(element): \(issue.detailedDescription)")
-            return false
+            // Reported here, with the element, instead of the audit's own message, which doesn't name it.
+            XCTFail("\(issue.compactDescription) on \(element): \(issue.detailedDescription)")
+            return true
         }
     }
 
