@@ -87,6 +87,9 @@ jobs:
             -clonedSourcePackagesDirPath build/SourcePackages $PKG_FLAGS
           echo "Package.resolved files after resolution:"
           find . -name Package.resolved -not -path "*/checkouts/*" -not -path "*/.build/*" -print
+          find Ereader.xcodeproj -print
+          find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 4 -name Package.resolved -print || true
+          ls -la build/SourcePackages || true
           # Collect both resolved files so they can be committed (bootstrap) or reviewed.
           mkdir -p build/resolved/Config build/resolved/Packages/EreaderKit
           cp "$RESOLVED" build/resolved/Config/Package.resolved
