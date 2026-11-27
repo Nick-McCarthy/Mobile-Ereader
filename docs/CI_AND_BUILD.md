@@ -19,7 +19,7 @@
   - `Config/Package.resolved`, which CI copies into the generated project (`Ereader.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/`) and builds with `-onlyUsePackageVersionsFromResolvedFile -disableAutomaticPackageResolution`.
 
   Every run uploads the versions it resolved as the **`package-resolved`** artifact. **To add or bump a package** (without a Mac): change the manifest, delete the affected resolved file(s), push, then commit the files from that run's `package-resolved` artifact. The run fails on purpose (*Require committed Package.resolved files*) until they're committed.
-- Fail on Swift warnings: CI passes `SWIFT_TREAT_WARNINGS_AS_ERRORS=YES` on the `xcodebuild` command line, so local experiments aren't blocked.
+- Fail on Swift warnings in **our** code only: `SWIFT_TREAT_WARNINGS_AS_ERRORS: YES` in `project.yml` and `.treatAllWarnings(as: .error)` on every `EreaderKit` target. Don't pass it on the `xcodebuild` command line: it would also reach third-party packages, which Xcode builds with `-suppress-warnings`, and the two flags conflict.
 - `permissions: contents: read`. Uses **no secrets**, so it is safe for pull requests from forks.
 - `concurrency` group per branch with `cancel-in-progress: true` to save runner minutes.
 

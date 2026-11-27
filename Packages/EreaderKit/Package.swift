@@ -1,7 +1,10 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 // Domain modules for the Ereader app. See docs/ARCHITECTURE.md#module-layout.
 // Direct dependencies are pinned with `exact:`; transitive ones are pinned by the committed Package.resolved.
 import PackageDescription
+
+// Warnings are errors in our modules only; dependencies are unaffected.
+let strict: [SwiftSetting] = [.treatAllWarnings(as: .error)]
 
 let package = Package(
     name: "EreaderKit",
@@ -20,25 +23,29 @@ let package = Package(
         .package(url: "https://github.com/readium/ZIPFoundation.git", exact: "3.0.2"),
     ],
     targets: [
-        .target(name: "Core"),
+        .target(name: "Core", swiftSettings: strict),
         .target(
             name: "Persistence",
-            dependencies: ["Core", .product(name: "GRDB", package: "GRDB.swift")]
+            dependencies: ["Core", .product(name: "GRDB", package: "GRDB.swift")],
+            swiftSettings: strict
         ),
         .target(
             name: "EPUBMetadata",
-            dependencies: ["Core", .product(name: "ReadiumZIPFoundation", package: "ZIPFoundation")]
+            dependencies: ["Core", .product(name: "ReadiumZIPFoundation", package: "ZIPFoundation")],
+            swiftSettings: strict
         ),
-        .target(name: "RemoteSources", dependencies: ["Core"]),
-        .target(name: "BookStorage", dependencies: ["Core"]),
-        .testTarget(name: "CoreTests", dependencies: ["Core"]),
+        .target(name: "RemoteSources", dependencies: ["Core"], swiftSettings: strict),
+        .target(name: "BookStorage", dependencies: ["Core"], swiftSettings: strict),
+        .testTarget(name: "CoreTests", dependencies: ["Core"], swiftSettings: strict),
         .testTarget(
             name: "PersistenceTests",
-            dependencies: ["Persistence", .product(name: "GRDB", package: "GRDB.swift")]
+            dependencies: ["Persistence", .product(name: "GRDB", package: "GRDB.swift")],
+            swiftSettings: strict
         ),
         .testTarget(
             name: "EPUBMetadataTests",
-            dependencies: ["EPUBMetadata", .product(name: "ReadiumZIPFoundation", package: "ZIPFoundation")]
+            dependencies: ["EPUBMetadata", .product(name: "ReadiumZIPFoundation", package: "ZIPFoundation")],
+            swiftSettings: strict
         ),
     ]
 )

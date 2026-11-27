@@ -123,7 +123,6 @@ jobs:
             -clonedSourcePackagesDirPath build/SourcePackages \
             $PKG_FLAGS \
             CODE_SIGNING_ALLOWED=NO \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             | xcbeautify --renderer github-actions
 
       - name: Export screenshots

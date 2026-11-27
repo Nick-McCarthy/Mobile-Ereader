@@ -17,6 +17,8 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     TARGETED_DEVICE_FAMILY: "1"
+    # Our targets only. Third-party packages are built with warnings suppressed by Xcode.
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
 
 packages:
   EreaderKit:
