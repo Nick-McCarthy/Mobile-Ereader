@@ -111,13 +111,27 @@ private struct BookRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder private var cover: some View {
-        if let path = book.coverPath, let files,
-            let image = UIImage(contentsOfFile: files.url(forCoverPath: path).path(percentEncoded: false))
-        {
-            Image(uiImage: image).resizable().scaledToFill()
-        } else {
-            Rectangle().fill(.quaternary).overlay(Image(systemName: "book.closed").foregroundStyle(.secondary))
+    @State private var loadedCover: UIImage?
+
+    private var coverURL: URL? {
+        guard let path = book.coverPath, let files else { return nil }
+        return files.url(forCoverPath: path)
+    }
+
+    /// Decorative: the row's text already names the book, so VoiceOver skips it.
+    private var cover: some View {
+        Group {
+            if let image = loadedCover ?? coverURL.flatMap(CoverImageCache.shared.cachedImage(at:)) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Rectangle().fill(.quaternary).overlay(Image(systemName: "book.closed").foregroundStyle(.secondary))
+            }
+        }
+        .accessibilityHidden(true)
+        .task(id: coverURL) {
+            loadedCover = nil
+            guard let coverURL else { return }
+            loadedCover = await CoverImageCache.shared.image(at: coverURL)
         }
     }
 }
