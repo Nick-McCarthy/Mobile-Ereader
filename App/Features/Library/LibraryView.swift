@@ -106,7 +106,6 @@ private struct BookRow: View {
                 Text(AuthorNameFormatter.string(for: book.authorName, in: authorFormat))
                     .font(.subheadline)
                     .foregroundStyle(.secondaryText)
-                    .lineLimit(1)
             }
         }
         .accessibilityElement(children: .combine)
