@@ -11,7 +11,7 @@ final class AccessibilityAuditTests: XCTestCase {
     func testEmptyLibraryPassesAudit() throws {
         let app = launch(arguments: ["-UITestMode"])
         XCTAssertTrue(app.staticTexts["No Books Yet"].waitForExistence(timeout: 15))
-        try app.performAccessibilityAudit()
+        try audit(app)
     }
 
     @MainActor
@@ -20,7 +20,17 @@ final class AccessibilityAuditTests: XCTestCase {
         // The row combines its texts into one element, so match on part of its label.
         let row = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Tombs of Atuan"))
         XCTAssertTrue(row.firstMatch.waitForExistence(timeout: 15))
-        try app.performAccessibilityAudit()
+        try audit(app)
+    }
+
+    /// Runs the audit and names each failing element in the test log, so CI output says what to fix.
+    @MainActor
+    private func audit(_ app: XCUIApplication) throws {
+        try app.performAccessibilityAudit { issue in
+            let element = issue.element.map { "\($0.elementType.rawValue) \"\($0.label)\" \($0.frame)" } ?? "no element"
+            print("Accessibility issue: \(issue.compactDescription) on \(element): \(issue.detailedDescription)")
+            return false
+        }
     }
 
     @MainActor
