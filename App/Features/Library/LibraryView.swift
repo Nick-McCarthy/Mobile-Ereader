@@ -21,6 +21,7 @@ struct LibraryView: View {
                         "No Books Yet",
                         systemImage: "books.vertical",
                         description: Text("Import an EPUB or connect iCloud Drive, Dropbox, or OneDrive in Settings.")
+                            .foregroundStyle(.secondaryText)
                     )
                 } else {
                     List(books) { book in
@@ -104,7 +105,7 @@ private struct BookRow: View {
                 Text(book.title).font(.headline).lineLimit(2)
                 Text(AuthorNameFormatter.string(for: book.authorName, in: authorFormat))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                     .lineLimit(1)
             }
         }
