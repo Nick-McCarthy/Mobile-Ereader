@@ -101,12 +101,18 @@ jobs:
           if-no-files-found: ignore
 
       - name: Build and run UI tests on the simulator
+        # A stuck test fails after its allowance instead of hanging the job; the step timeout is a backstop
+        # that still leaves time for the always() steps to upload the result bundle.
+        timeout-minutes: 20
         run: |
           set -o pipefail
           xcodebuild test \
             -project Ereader.xcodeproj \
             -scheme Ereader \
             -destination "$SIMULATOR" \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 300 \
+            -maximum-test-execution-time-allowance 600 \
             -resultBundlePath build/Ereader.xcresult \
             -derivedDataPath build/DerivedData \
             -clonedSourcePackagesDirPath build/SourcePackages \
