@@ -1,0 +1,4 @@
+// Shared build settings for the Ereader app target.
+// Public app identifiers (not secrets) come from the optional, git-ignored Secrets.xcconfig.
+// CI writes that file from repository variables; locally, copy Secrets.example.xcconfig.
+#include? "Secrets.xcconfig"
