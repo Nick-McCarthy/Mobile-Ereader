@@ -161,7 +161,7 @@ struct FilesRemoteSourceTests {
             }
             return -1
         }
-        #expect(await task.value == 1, "the walk must throw at the first item after cancellation")
+        #expect(try await task.value == 1, "the walk must throw at the first item after cancellation")
     }
 
     @Test("Stopping early ends a listing of a large tree")
