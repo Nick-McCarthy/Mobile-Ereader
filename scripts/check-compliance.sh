@@ -46,6 +46,24 @@ fi
 [ "$(plist_value "$PRIVACY" NSPrivacyCollectedDataTypes)" = "0" ] \
     && pass "no collected data types" || fail "$PRIVACY must list no collected data types (or update the docs)"
 
+# Required-reason APIs: every category our sources use must be declared in the privacy manifest.
+# Third-party packages are checked by hand when they are added or updated (docs/SECURITY_AND_APP_STORE.md).
+check_api() {
+    local category="$1" pattern="$2"
+    if grep -rqE "$pattern" App Packages/EreaderKit/Sources --include='*.swift'; then
+        if grep -q "NSPrivacyAccessedAPICategory$category<" "$PRIVACY"; then
+            pass "required-reason API category $category is declared"
+        else
+            fail "sources use a $category API ($pattern) but $PRIVACY doesn't declare it"
+        fi
+    fi
+}
+check_api FileTimestamp 'creationDate|[mM]odificationDate|attributesOfItem|getattrlist|(^|[^A-Za-z_.])[fl]?stat\('
+check_api SystemBootTime 'systemUptime|mach_absolute_time'
+check_api DiskSpace 'volumeAvailableCapacity|volumeTotalCapacity|systemFreeSize|systemSize|statfs|NSFileSystemFree'
+check_api ActiveKeyboards 'activeInputModes'
+check_api UserDefaults 'UserDefaults|@AppStorage'
+
 # Built bundle, when given.
 if [ $# -ge 1 ]; then
     APP="$1"
