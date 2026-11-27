@@ -30,7 +30,7 @@ Original requirements: [`Concept.md`](Concept.md) — the source of truth if any
 1. **Work from the action plan.** Name the task id in your branch and commits; tick the box when done.
 2. **Keep docs in sync.** If you change the schema, scopes, architecture, or a spec decision, update the matching file in `/docs` in the same change. If you add a new helper file, add a row to the table above.
 3. **Security is a requirement, not a polish step.** Check [`SECURITY_AND_APP_STORE.md`](docs/SECURITY_AND_APP_STORE.md) before touching networking, storage, auth, or EPUB parsing. Tokens live only in the Keychain and are never logged; never add ATS exceptions; treat every EPUB as untrusted.
-4. **No new third-party dependencies** beyond Readium, GRDB, and ZIPFoundation without the owner's approval.
+4. **No new third-party dependencies** beyond Readium (and what it pulls in), GRDB, and Readium's ZIPFoundation fork without the owner's approval.
 5. **Never hit real Dropbox or Microsoft APIs in tests**; use `FakeRemoteSource` and sanitised recorded responses. Never commit secrets or copyrighted books.
 6. **CI is the only build machine.** Push your branch and use the GitHub Actions result (and its `.xcresult` artifact) as evidence. Never claim something was built or tested based on a local run you couldn't do. Edit `project.yml`, never the generated `.xcodeproj`.
 7. **Out-of-scope features** (see "Later" in the action plan) need owner sign-off first.

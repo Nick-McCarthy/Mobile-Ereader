@@ -15,7 +15,7 @@ Concept requirement: *"the end result must be able to satisfy Apple security req
 - [ ] **Unlink leaves remote data untouched**: no API call other than token revocation; tests assert the adapters issue no write requests.
 - [ ] **Least privilege**: read-only scopes only (Dropbox `files.metadata.read`, `files.content.read`, `account_info.read`; Microsoft `Files.Read`, `User.Read`, `offline_access`). No camera/mic/location/contacts/tracking entitlements. Photo access, if used for custom covers, via `PhotosPicker` (no permission prompt needed).
 - [ ] **No private APIs**, no dynamic code download/execution (Guideline 2.5.2).
-- [ ] **Dependencies** pinned via SPM `Package.resolved`; review release notes / advisories when bumping. Only the three planned third-party packages without discussion (Readium, GRDB, ZIPFoundation).
+- [ ] **Dependencies** pinned: direct dependencies with exact versions, everything else by the committed `Package.resolved` files, which CI enforces; review release notes / advisories when bumping. Only the three planned third-party packages without discussion (Readium, GRDB, Readium's ZIPFoundation fork). Readium's own transitive dependencies (CryptoSwift, Zip, Fuzi, SwiftSoup, DifferenceKit, and others) come with it; review them when bumping Readium.
 
 ## App Store Review Guidelines
 - [ ] **Privacy manifest** `PrivacyInfo.xcprivacy` in the app target: declare *Required Reason APIs* used (e.g. `NSPrivacyAccessedAPICategoryUserDefaults` – `CA92.1`, `NSPrivacyAccessedAPICategoryFileTimestamp` – `C617.1` (iCloud modification dates), `NSPrivacyAccessedAPICategoryDiskSpace` if showing free space – `E174.1`), `NSPrivacyTracking = false`, no tracking domains. Confirm the bundled packages' own manifests.

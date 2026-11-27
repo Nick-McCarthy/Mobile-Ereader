@@ -21,6 +21,10 @@ settings:
 packages:
   EreaderKit:
     path: Packages/EreaderKit
+  # Pinned exactly; transitive dependencies are pinned by Config/Package.resolved (see docs/CI_AND_BUILD.md).
+  Readium:
+    url: https://github.com/readium/swift-toolkit.git
+    exactVersion: 3.11.1
 
 targets:
   Ereader:
@@ -50,6 +54,12 @@ targets:
         product: RemoteSources
       - package: EreaderKit
         product: BookStorage
+      - package: Readium
+        product: ReadiumShared
+      - package: Readium
+        product: ReadiumStreamer
+      - package: Readium
+        product: ReadiumNavigator
 
   EreaderUITests:
     type: bundle.ui-testing
