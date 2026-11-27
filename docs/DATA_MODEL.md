@@ -94,3 +94,20 @@ Prefer `UserDefaults` (`@AppStorage`) for simple prefs: author display format, l
   - *Author*: family name (from components), then given, then title
   - *Publication date*: `publicationDateSort` (nulls last)
   - *Downloaded / not downloaded*: `downloadState = 'downloaded'` first (toggle direction), then title
+- Reversing a sort (`LibraryQuery.reversed`) flips only the main key. Placeholder titles/authors, undated books, and never-opened books stay last either way.
+- `titleSort` is built by `TitleSortKey.make(from:)` (Core): case- and accent-folded, with a leading "the", "a", or "an" dropped unless nothing would remain.
+
+## Repositories
+Feature code reads and writes through the protocols in `Persistence/Repositories.swift`, never through GRDB directly. `DatabaseRepositories(database:)` bundles the GRDB implementations; tests and previews can substitute fakes.
+
+| Protocol | Covers |
+|---|---|
+| `BookRepository` | Library list (`LibraryQuery`: sort, direction, search), get/save/delete one book, `markOpened` |
+| `CollectionRepository` | Collections in user order, books in a collection, create/rename/delete/reorder, add/remove books |
+| `SeriesRepository` | Series by name, entries (numbered first, then by title), a book's series, create/rename/delete, `setSeries` (one series per book) |
+| `BookmarkRepository` | A book's bookmarks in reading order, add/delete |
+| `ReadingPositionRepository` | Get/save the last position; saving also updates `book.progression` in the same transaction |
+
+- Every `observe…` method returns an `AsyncThrowingStream` backed by GRDB `ValueObservation`: the current value first, then a new value after each commit that touches the tables it read. Cancelling the consuming task stops the observation.
+- Search uses `FTS5Pattern(matchingAllPrefixesIn:)`, so every word must prefix-match somewhere in title, author, series, or collection names. Text that yields no searchable words returns no books; blank text returns all books.
+- Collection and series names are trimmed. Empty names throw `RepositoryError.emptyName`; names that clash ignoring case throw `RepositoryError.duplicateName`.
