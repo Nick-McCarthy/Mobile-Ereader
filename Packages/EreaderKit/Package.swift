@@ -42,7 +42,7 @@ let package = Package(
         // Workflows that span modules: importing, and later sync's parse-and-insert.
         .target(
             name: "LibraryServices",
-            dependencies: ["Core", "Persistence", "EPUBMetadata", "BookStorage"],
+            dependencies: ["Core", "Persistence", "EPUBMetadata", "BookStorage", "RemoteSources"],
             swiftSettings: strict
         ),
         .testTarget(name: "CoreTests", dependencies: ["Core"], swiftSettings: strict),
@@ -65,7 +65,7 @@ let package = Package(
         .testTarget(
             name: "LibraryServicesTests",
             dependencies: [
-                "LibraryServices", "Persistence", "BookStorage",
+                "LibraryServices", "Persistence", "BookStorage", "RemoteSources", "RemoteSourcesTesting",
                 .product(name: "ReadiumZIPFoundation", package: "ZIPFoundation"),
             ],
             swiftSettings: strict

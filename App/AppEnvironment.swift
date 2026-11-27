@@ -9,11 +9,16 @@ struct AppEnvironment: Sendable {
     let repositories: DatabaseRepositories
     let files: BookFileStore
     let importer: LocalBookImporter
+    /// Removes Keychain tokens left by an earlier install. Nil in UI tests, which never touch the Keychain.
+    let tokenCleanup: OrphanedTokenCleanup?
 
-    init(database: AppDatabase, files: BookFileStore) {
+    init(database: AppDatabase, files: BookFileStore, usesKeychain: Bool = true) {
         self.repositories = DatabaseRepositories(database: database)
         self.files = files
         self.importer = LocalBookImporter(books: repositories.books, files: files)
+        let sources = repositories.sources
+        let stores = usesKeychain ? OrphanedTokenCleanup.keychainStores() : nil
+        self.tokenCleanup = stores.map { OrphanedTokenCleanup(sources: sources, stores: $0) }
     }
 
     /// The on-device database and folders. UI tests (`-UITestMode`) get an empty in-memory library instead,
@@ -26,7 +31,7 @@ struct AppEnvironment: Sendable {
                 applicationSupport: root.appendingPathComponent("Support", isDirectory: true),
                 caches: root.appendingPathComponent("Caches", isDirectory: true)
             )
-            return AppEnvironment(database: try AppDatabase.inMemory(), files: files)
+            return AppEnvironment(database: try AppDatabase.inMemory(), files: files, usesKeychain: false)
         }
         return AppEnvironment(database: try AppDatabase.onDisk(at: AppDatabase.defaultURL()), files: try .standard())
     }

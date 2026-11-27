@@ -25,6 +25,8 @@ struct EreaderApp: App {
                     .onOpenURL { url in
                         Task { await importController.importBooks([url]) }
                     }
+                    // Keychain items outlive a reinstall; drop any no linked source owns (finding F-A1).
+                    .task { _ = try? await environment.tokenCleanup?.run() }
             } else {
                 ContentUnavailableView(
                     "Can't Open Library",

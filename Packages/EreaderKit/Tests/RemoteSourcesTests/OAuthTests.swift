@@ -375,4 +375,8 @@ private final class FlakyTokenStore: TokenStore, @unchecked Sendable {
             storage[sourceId] = nil
         }
     }
+
+    func storedSourceIds() throws -> [String] {
+        lock.withLock { Array(storage.keys) }
+    }
 }

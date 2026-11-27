@@ -20,4 +20,8 @@ public final class InMemoryTokenStore: TokenStore, @unchecked Sendable {
     public func deleteTokens(forSource sourceId: String) throws {
         lock.withLock { _ = storage.removeValue(forKey: sourceId) }
     }
+
+    public func storedSourceIds() throws -> [String] {
+        lock.withLock { Array(storage.keys) }
+    }
 }

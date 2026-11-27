@@ -10,6 +10,8 @@ public protocol TokenStore: Sendable {
     func save(_ tokens: OAuthTokens, forSource sourceId: String) throws
     /// Deleting tokens that don't exist is not an error.
     func deleteTokens(forSource sourceId: String) throws
+    /// Every source id that has tokens in this store, for removing ones left behind by a reinstall.
+    func storedSourceIds() throws -> [String]
 }
 
 public enum KeychainError: Error, Equatable, Sendable {
@@ -59,6 +61,23 @@ public struct KeychainTokenStore: TokenStore {
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError.unexpectedStatus(status)
         }
+    }
+
+    public func storedSourceIds() throws -> [String] {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecUseDataProtectionKeychain as String: true,
+        ]
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitAll
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return [] }
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else {
+            throw KeychainError.unexpectedStatus(status)
+        }
+        return items.compactMap { $0[kSecAttrAccount as String] as? String }
     }
 
     /// Identifies the item. Uses the data-protection keychain (the iOS keychain, also on macOS).
