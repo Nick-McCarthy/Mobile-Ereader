@@ -68,6 +68,26 @@ struct BookRepositoryTests {
         #expect(book.titleIsPlaceholder)
         #expect(book.authorRaw == Placeholders.author)
         #expect(book.authorIsPlaceholder)
+        #expect(book.authorStoredFormat == .unknown)
+        #expect(book.authorFamily == nil)
+    }
+
+    @Test("New books detect the author format and fill the sort parts; setAuthor recomputes them")
+    func authorParts() {
+        var book = Book(sourceKind: .local, title: "Earthsea", authorRaw: " Le Guin, Ursula K. ")
+        #expect(book.authorRaw == "Le Guin, Ursula K.")
+        #expect(book.authorStoredFormat == .lastFirst)
+        #expect(book.authorFamily == "Le Guin")
+        #expect(book.authorGiven == "Ursula K.")
+        #expect(AuthorNameFormatter.string(for: book.authorName, in: .firstLast) == "Ursula K. Le Guin")
+
+        book.setAuthor(raw: "Gabriel García Márquez", fileAs: "García Márquez, Gabriel")
+        #expect(book.authorStoredFormat == .firstLast)
+        #expect(book.authorFamily == "García Márquez")
+
+        book.setAuthor(raw: "Prince, The Artist", fileAs: nil, storedFormat: .unknown)
+        #expect(book.authorFamily == nil)
+        #expect(AuthorNameFormatter.string(for: book.authorName, in: .lastFirst) == "Prince, The Artist")
     }
 
     @Test("Recently viewed: newest opened first, never-opened last by date added")

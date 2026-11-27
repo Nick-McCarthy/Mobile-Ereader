@@ -55,4 +55,13 @@ Concept requirement: books store authors as either `"Last, First"` or `"First La
 
 **Components:** parse into `given` / `family` (+ optional particles like "van", "de", "le" kept with family, suffixes kept separately). Unit-test a fixture table of tricky names: `"Le Guin, Ursula K."`, `"Ursula K. Le Guin"`, `"Tolkien, J. R. R."`, `"Martin Luther King, Jr."`, `"Homer"`, `"Gabriel García Márquez"`, `"Bob Smith & Jane Doe"`.
 
-**Global setting** (Settings → Library → *Author name format*): `As stored` · `First Last` · `Last, First`. `AuthorNameFormatter` (in `Core`) renders from components; it is a pure function and used everywhere an author is shown. Author sort always uses family name regardless of display setting. The raw value is never mutated, so the setting is fully reversible.
+**Implementation** (`Core/AuthorName.swift`):
+- `AuthorName(raw:fileAs:)` detects the format; `AuthorName(raw:storedFormat:fileAs:)` parses with a format the user chose. `people` holds one `PersonName` (`given`, `family`, `suffix`) per author; `primary` is the first.
+- Several authors are split on `&` or `;` and parsed one by one. A part with no comma is read as "First Last" even when the book's format is `lastFirst`.
+- `lastFirst` also accepts a trailing suffix: `"King, Martin Luther, Jr."`. More commas than that → `unknown`.
+- Particles (`van`, `von`, `de`, `da`, `di`, `du`, `del`, `della`, `der`, `den`, `des`, `la`, `le`, `ter`, `ten`, `dos`, `das`, `St.`) before the last word join the family name, but at least one given name is kept ("Van Morrison" → family "Morrison").
+- Organisation words (`Press`, `Publishing`, `Books`, `Inc`, `Ltd`, `Society`, `University`, `Gutenberg`, …) → `unknown`.
+- Without file-as, a double surname can't be detected: "Gabriel García Márquez" gives family "Márquez". A file-as of `"García Márquez, Gabriel"` fixes it.
+- `Book.init` / `Book.setAuthor(raw:fileAs:storedFormat:)` (Persistence) run detection and store the primary person's `authorGiven` / `authorFamily` for sorting. Suffixes aren't stored; `book.authorName` re-parses the raw value for display.
+
+**Global setting** (Settings → Library → *Author name format*): `As stored` · `First Last` · `Last, First`. `AuthorDisplayFormat` (`asStored`, `firstLast`, `lastFirst`; stored in UserDefaults by raw value). `AuthorNameFormatter.string(for:in:)` (in `Core`) renders from components, joining several authors with " & ", and shows `unknown` values verbatim; it is a pure function and used everywhere an author is shown. Author sort always uses family name regardless of display setting. The raw value is never mutated, so the setting is fully reversible.

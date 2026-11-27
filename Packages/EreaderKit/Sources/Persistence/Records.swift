@@ -47,31 +47,66 @@ public struct Book: Codable, Equatable, Identifiable, Sendable, FetchableRecord,
     public var lastOpenedAt: Date?
     public var progression: Double
 
-    /// A new book. Placeholders are used for a missing title or author, and `titleSort` is derived from the title.
+    /// A new book. Placeholders are used for a missing title or author, `titleSort` is derived from the title,
+    /// and the author's stored format and name parts are detected (see `setAuthor`).
     public init(
         id: String = UUID().uuidString,
         sourceKind: SourceKind,
         title: String?,
         authorRaw: String?,
-        authorStoredFormat: AuthorStoredFormat = .unknown,
+        authorFileAs: String? = nil,
+        authorStoredFormat: AuthorStoredFormat? = nil,
         dateAdded: Date = Date()
     ) {
         let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let cleanAuthor = authorRaw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.id = id
         self.sourceKind = sourceKind
         self.title = cleanTitle.isEmpty ? Placeholders.title : cleanTitle
         self.titleSort = TitleSortKey.make(from: self.title)
         self.titleIsPlaceholder = cleanTitle.isEmpty
-        self.authorRaw = cleanAuthor.isEmpty ? Placeholders.author : cleanAuthor
-        self.authorIsPlaceholder = cleanAuthor.isEmpty
-        self.authorStoredFormat = authorStoredFormat
+        self.authorRaw = Placeholders.author
+        self.authorIsPlaceholder = true
+        self.authorStoredFormat = .unknown
         self.downloadState = .notDownloaded
         self.isUserEdited = false
         self.userEditedFields = []
         self.isMissingFromSource = false
         self.dateAdded = dateAdded
         self.progression = 0
+        setAuthor(raw: authorRaw, fileAs: authorFileAs, storedFormat: authorStoredFormat)
+    }
+
+    /// Sets the author and recomputes the sort parts. `storedFormat` nil means detect it from `raw`.
+    /// A missing author becomes the placeholder, with no name parts.
+    public mutating func setAuthor(raw: String?, fileAs: String?, storedFormat: AuthorStoredFormat? = nil) {
+        let clean = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let cleanFileAs = fileAs?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        authorFileAs = cleanFileAs.isEmpty ? nil : cleanFileAs
+        guard !clean.isEmpty else {
+            authorRaw = Placeholders.author
+            authorIsPlaceholder = true
+            authorStoredFormat = .unknown
+            authorGiven = nil
+            authorFamily = nil
+            return
+        }
+        let name: AuthorName
+        if let storedFormat {
+            name = AuthorName(raw: clean, storedFormat: storedFormat, fileAs: authorFileAs)
+        } else {
+            name = AuthorName(raw: clean, fileAs: authorFileAs)
+        }
+        authorRaw = clean
+        authorIsPlaceholder = false
+        authorStoredFormat = name.storedFormat
+        authorGiven = name.primary?.given
+        authorFamily = name.primary?.family
+    }
+
+    /// The author's name parsed with the stored format, ready for `AuthorNameFormatter`.
+    public var authorName: AuthorName {
+        let format: AuthorStoredFormat = authorIsPlaceholder ? .unknown : authorStoredFormat
+        return AuthorName(raw: authorRaw, storedFormat: format, fileAs: authorFileAs)
     }
 
     /// True for a downloaded book whose source was unlinked. See docs/REMOTE_SOURCES.md#unlinking--detached-books.

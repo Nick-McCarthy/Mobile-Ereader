@@ -23,7 +23,7 @@ Implemented in `Packages/EreaderKit/Sources/Persistence`: `AppDatabase` (opening
 | `authorRaw` | TEXT NOT NULL | Exactly as parsed (or `"Unknown Author"`) |
 | `authorFileAs` | TEXT NULL | OPF `opf:file-as` / `refines … file-as` if present |
 | `authorStoredFormat` | TEXT NOT NULL | `firstLast` \| `lastFirst` \| `unknown` — auto-detected, user-overridable (see [`EPUB_METADATA.md`](EPUB_METADATA.md#author-name-normalisation)) |
-| `authorGiven` / `authorFamily` | TEXT NULL | Parsed components used to render any display format |
+| `authorGiven` / `authorFamily` | TEXT NULL | The primary author's parsed parts, used for sorting (null for `unknown` and placeholders). Display re-parses `authorRaw` with `authorStoredFormat`, so suffixes and co-authors need no columns |
 | `publicationDate` | TEXT NULL | ISO-8601 (may be year-only, e.g. `"1998"`); null renders as "Unknown" |
 | `publicationDateSort` | INTEGER NULL | `yyyymmdd`, nulls sort last |
 | `language`, `publisher`, `description`, `identifier` | TEXT NULL | Nice-to-have, cheap to capture |
