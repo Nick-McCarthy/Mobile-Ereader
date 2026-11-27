@@ -29,7 +29,9 @@ Typical cost: 3–5 small requests per book instead of the full file. **Fallback
 - `EPUBMetadataReader.read(remote:limits:fallbackDownload:)` takes any `ByteRangeReading` and gives the same result as a local parse, with the same `EPUBLimits`.
 - `RemoteZipReader` (a `DataSource`) and its `RangeCache` work like this:
   - Opening fetches the last 64 KB.
-  - `EPUBArchive` calls `expectEntry(compressedSize:)` before each entry, so the next fetch covers the entry plus 4 KB for its local header. Every fetch is at least 64 KB.
+  - `EPUBArchive` calls `expectEntry(compressedSize:)` before each entry, so the next fetch covers the entry plus 4 KB for its local header. Every fetch is at least 64 KB and at most 16 MB.
+  - Before that, `EPUBArchive` refuses an entry whose declared compressed size is far above its uncompressed size (`entryTooLarge`), so a lying central directory can't make a fetch bigger than the entry limits allow (audit A1.1).
+  - A negative `length` from an adapter throws `ByteRangeError.invalidLength`, and range arithmetic can't overflow.
   - Fetched blocks are reused, capped at 32 MB.
   - Tests check that a ~600 KB book takes at most 5 reads, a small book takes 1, and ZIP64 end records work.
 - When the fallback is used:
@@ -55,7 +57,7 @@ Local files (imports, already-downloaded books, and iCloud/Files items) are pars
 EPUBs are untrusted input.
 - Never extract the archive to disk with entry paths as file names (zip-slip). Read entries in-memory or via Readium. The parser only reads entries into memory, and links that resolve outside the archive root (`..` past the root, absolute paths, URLs) are ignored.
 - Caps (`EPUBLimits`, defaults): 10,000 entries; 10 MB per entry read; 20 MB total read per book; entries over 1 MB may not inflate more than 100× their compressed size (zip-bomb guard); XML depth 64; cover images over 50 megapixels are skipped. Declared sizes are checked first and the real inflated output is counted too, since headers can lie.
-- Use `XMLParser` with `shouldResolveExternalEntities = false`. Documents that declare entities (`<!ENTITY`) are rejected outright, which also blocks entity-expansion ("billion laughs") attacks.
+- Use `XMLParser` with `shouldResolveExternalEntities = false`. Documents that declare entities are rejected outright, which also blocks entity-expansion ("billion laughs") attacks. The parser delegate aborts on any internal, external, or unparsed entity declaration, whatever the encoding (UTF-16 included); a byte search for UTF-8 `<!ENTITY` is only a fast path (audit A1.4).
 - A malformed book must never crash sync — record it with placeholders and a `parseError` note.
 
 ## Author name normalisation

@@ -4,8 +4,13 @@ Reader screen: see [`READER.md`](READER.md). All screens must support Dynamic Ty
 
 App root: `TabView` — **Library** · **Collections** · **Settings**.
 
+## All screens
+- **Secondary text** (authors, captions, empty-state descriptions) uses `.secondaryText` (`App/Features/SecondaryText.swift`), not the system `.secondary`, which falls just short of 4.5:1 contrast at small sizes.
+- **Accessibility audit:** `UITests/AccessibilityAuditTests` runs `performAccessibilityAudit()` on each screen it covers (today the Library, empty and with a book); a failure names the element. Add new screens to it.
+- Decorative images (covers beside a title) are hidden from VoiceOver; progress indicators have a label.
+
 ## Library
-- **Toolbar:** search bar (`.searchable`, always available, pulls down from nav bar), *View* menu, *Sort* menu, *Import* button (Files picker for local EPUBs).
+- **Toolbar:** search bar (`.searchable`, always available, pulls down from nav bar), *View* menu, *Sort* menu, *Import* button (Files picker for local EPUBs). Importing a book that is already in the library asks *Replace* / *Keep Both* / *Skip* (see [`DATA_MODEL.md`](DATA_MODEL.md#series_book)).
 - **View modes** (persisted in `@AppStorage`):
   - **Grid** — `LazyVGrid` of covers (adaptive ~110 pt columns), title + author under each, download badge (cloud icon when not downloaded; circular progress while downloading).
   - **List** — row with small cover, title, author (formatted per setting), publication year, progress %, download state.

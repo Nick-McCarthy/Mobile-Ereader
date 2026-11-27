@@ -67,7 +67,8 @@ As implemented (P2.1, `RemoteSources/RemoteSource.swift`):
   - `forceRefresh()` is for a `401`.
   - `signOut()` revokes on a best-effort basis, then deletes the tokens.
   - A refresh rejected with 400 / 401 (or no refresh token) becomes `RemoteSourceError.needsRelink`. Network errors pass through so a retry can work.
-- `TokenStore` → `KeychainTokenStore`: generic password, service `ereader.<kind>`, account `library_source.id`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, data-protection keychain, value = JSON. `OAuthTokens` redacts itself in `description`. Tests use `InMemoryTokenStore` (RemoteSourcesTesting) and check the Keychain query attributes rather than the real Keychain, which unsigned `swift test` binaries can't use.
+- `TokenStore` → `KeychainTokenStore`: generic password, service `ereader.<kind>`, account `library_source.id`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, data-protection keychain, value = JSON. `storedSourceIds()` lists the accounts that have items.
+- Keychain items survive deleting the app, but the database doesn't. At every launch, `OrphanedTokenCleanup` (LibraryServices) deletes Dropbox and OneDrive items whose source id isn't the linked source of that kind (audit A1.2). UI tests (`-UITestMode`) skip it and never touch the Keychain. `OAuthTokens` redacts itself in `description`. Tests use `InMemoryTokenStore` (RemoteSourcesTesting) and check the Keychain query attributes rather than the real Keychain, which unsigned `swift test` binaries can't use.
 - All HTTP goes through `HTTPClient` (`URLSession.ephemeralClient`: no cookies, cache, or stored credentials), so tests use recorded responses and never reach the network.
 
 ### Dropbox specifics
@@ -101,9 +102,10 @@ As implemented (P2.1, `RemoteSources/RemoteSource.swift`):
   - The caller saves `bookmark` to `library_source.rootBookmark` after `link`, after each sync (a stale bookmark is re-created in place), and after `unlink` (which only forgets it).
   - A missing bookmark, one that won't resolve, or a folder that's gone throws `needsRelink`.
 - Every listing is a full one: `.reset`, then every book, then a `files:<time>` cursor.
+  - The walk runs off the source's actor (`@concurrent`), yields each book as it finds it (in file-system order, not sorted), and checks cancellation before every item, so stopping a sync of a huge folder is prompt (audit A1.5).
   - Ids are paths relative to the picked folder, so listing a sub-folder still gives root-relative ids.
   - Hidden files and folders and package contents are skipped.
-  - `.Name.epub.icloud` is listed as `Name.epub`. Its size comes from the real item when the system has it, otherwise nil. A real file wins over a leftover placeholder with the same name.
+  - `.Name.epub.icloud` is listed as `Name.epub`. Its size comes from the real item when the system has it, otherwise nil. A real file wins over a leftover placeholder with the same name: the placeholder is skipped when the real file exists.
   - `version` is `<modified ms>-<size>`.
 - Ids containing `.` or `..` are rejected (`notFound`), so a stored id can't reach outside the folder.
 - `byteRangeReader` is nil. Metadata uses `download` to a temporary file instead of parsing in place, because `NSFileCoordinator`'s accessor is synchronous and the parser is async.

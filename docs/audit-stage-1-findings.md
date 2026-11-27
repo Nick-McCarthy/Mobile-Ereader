@@ -35,6 +35,8 @@ The audit changed no code, so no new CI run was needed. Each fix task must inclu
 
 Ordered by severity. "Rule" cites the skill reference or project doc each finding is judged against.
 
+**Fix status (2026-11-27):** High and Medium findings are fixed on `feature/a1-audit-fixes` (tasks A1.1–A1.10, CI green). A1.10's CI-failure proof is still open, and the Low findings outside those tasks (F-E2, F-E4, F-E5) move to Phase 3.
+
 | Id | Area | Severity | File:line | Finding | Evidence | Rule | Action |
 |---|---|---|---|---|---|---|---|
 | F-B1 | B | **High** | `EPUBMetadata/EPUBArchive.swift:57-68`, `RemoteZipReader.swift:35`, `:112` | `EPUBArchive.data` checks an entry's declared *uncompressed* size against the limits, but never its *compressed* size. `expectEntry` then sizes the next ranged read from that unchecked value. A hostile central directory (for example, compressed 2 GB, uncompressed 1 KB) makes one fetch cover the rest of the file and allocate it as a single `Data`: memory exhaustion while syncing. The 32 MB cache cap only applies after the block arrives. A compressed size near `Int64.max` also makes `offset + size` overflow, which traps. Confirms lead L2. | Code path: `data(at:)` → `expectEntry(compressedSize:)` → `RangeCache.bytes` → `fetch(offset..<min(offset + size, length))`. No test covers a lying compressed size. | `EPUB_METADATA.md` Security ("treat every EPUB as untrusted"; limits apply remotely) | `A1.1` |

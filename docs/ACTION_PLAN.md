@@ -57,25 +57,26 @@ The user can link any combination of the three. Spec: [`REMOTE_SOURCES.md`](REMO
 ## Audit stage 1 fixes
 From [`audit-stage-1-findings.md`](audit-stage-1-findings.md). High before P2.5; Medium before P2.7 unless noted; each with its own test and CI run.
 
-- [ ] **A1.1 Bound remote fetches by the limits** (F-B1 High, F-B3, F-C2) — reject entries whose declared compressed size exceeds the allowed uncompressed size plus deflate overhead; clamp `expectEntry` hints to `maxEntryBytes`; overflow-safe range arithmetic in `RangeCache`; throw on a negative `length()`; document the one-read-at-a-time assumption.
+- [x] **A1.1 Bound remote fetches by the limits** (F-B1 High, F-B3, F-C2) — reject entries whose declared compressed size exceeds the allowed uncompressed size plus deflate overhead; clamp `expectEntry` hints to `maxEntryBytes`; overflow-safe range arithmetic in `RangeCache`; throw on a negative `length()`; document the one-read-at-a-time assumption.
   *Done when:* tests with a lying central directory (huge compressed size, `Int64.max`) fail with `entryTooLarge` and never request more than the limit.
-- [ ] **A1.2 First-launch Keychain cleanup** (F-A1) — on first launch after install (flag in the database), delete every `ereader.*` Keychain item. Lands with P2.5.
+- [x] **A1.2 Orphaned Keychain cleanup** (F-A1) — at every launch, delete Dropbox / OneDrive Keychain items whose source id isn't the linked source of that kind (`OrphanedTokenCleanup`). Comparing with the database, rather than a first-launch flag, also covers a lost or reset database.
   *Done when:* a test with an in-memory store shows orphaned items are removed once and linked sources' items are kept.
-- [ ] **A1.3 Token store failure paths** (F-A2, F-A3, F-A4) — undecodable items become `needsRelink` and are deletable by `signOut`; after a successful refresh whose save fails, keep the fresh tokens in memory and retry the save; replace the `status: 0` sentinel with explicit error cases.
+- [x] **A1.3 Token store failure paths** (F-A2, F-A3, F-A4) — undecodable items become `needsRelink` and are deletable by `signOut`; after a successful refresh whose save fails, keep the fresh tokens in memory and retry the save; replace the `status: 0` sentinel with explicit error cases.
   *Done when:* tests cover a corrupt item, a failing save after refresh, and sign-out of a corrupt item.
-- [ ] **A1.4 Encoding-proof entity guard** (F-B2) — abort parsing from the `XMLParserDelegate` entity-declaration callbacks instead of (or as well as) the byte search.
+- [x] **A1.4 Encoding-proof entity guard** (F-B2) — abort parsing from the `XMLParserDelegate` entity-declaration callbacks instead of (or as well as) the byte search.
   *Done when:* UTF-16 and UTF-8 entity fixtures are both rejected with `malformedXML`.
-- [ ] **A1.5 Cancellable, off-actor folder walk** (F-C1) — run the `FilesListing` walk off the actor's executor (`@concurrent` or a dedicated task), check cancellation per item, and stream results instead of collecting them all.
+- [x] **A1.5 Cancellable, off-actor folder walk** (F-C1) — run the `FilesListing` walk off the actor's executor (`@concurrent` or a dedicated task), check cancellation per item, and stream results instead of collecting them all.
   *Done when:* a test cancels a walk of a large temporary tree and the stream ends with `cancelled` promptly.
-- [ ] **A1.6 Test fixes** (F-D1, F-D4) — rewrite the shared-refresh test with a gated fake HTTP client (no sleep) and a short `expires_in` so a non-shared refresh would make two requests; add iCloud tests for a file deleted between listings and for the stale-bookmark path (or document why it can't be triggered).
+- [x] **A1.6 Test fixes** (F-D1, F-D4) — rewrite the shared-refresh test with a gated fake HTTP client (no sleep) and a short `expires_in` so a non-shared refresh would make two requests; add iCloud tests for a file deleted between listings and for the stale-bookmark path (or document why it can't be triggered).
   *Done when:* the shared-refresh test fails if sharing is removed.
-- [ ] **A1.7 Import completeness** (F-D2, F-D3) — save series from EPUB metadata on import; detect a re-import of the same book (package identifier, else content hash) and offer to keep or replace instead of duplicating.
+- [x] **A1.7 Import completeness** (F-D2, F-D3) — save series from EPUB metadata on import; detect a re-import of the same book (package identifier, else content hash) and offer to keep or replace instead of duplicating.
   *Done when:* importer tests cover series and duplicate import.
-- [ ] **A1.8 Library view hygiene** (F-E1, F-E2, F-E4, F-E5) — async, cached cover loading off the main actor; per-import state in `BookImportController`; a stored `@Bindable`-friendly alert flag instead of `Binding(get:set:)`; show an error state when the library can't be read. F-E1 may land with the Phase 3 grid.
-- [ ] **A1.9 Accessibility automation** (F-F1, F-F2) — add a UI test running `performAccessibilityAudit()` on the Library (empty and with a seeded book in `-UITestMode`); hide the decorative cover from VoiceOver; label the import progress indicator.
+- [x] **A1.8 Library view hygiene** (F-E1, F-E2, F-E4, F-E5) — async, cached cover loading off the main actor; per-import state in `BookImportController`; a stored `@Bindable`-friendly alert flag instead of `Binding(get:set:)`; show an error state when the library can't be read. F-E1 is done (`CoverImageCache`); the Low items F-E2, F-E4, and F-E5 move to Phase 3 with the Library rework.
+- [x] **A1.9 Accessibility automation** (F-F1, F-F2) — add a UI test running `performAccessibilityAudit()` on the Library (empty and with a seeded book in `-UITestMode`); hide the decorative cover from VoiceOver; label the import progress indicator.
   *Done when:* the audit test passes in CI.
 - [ ] **A1.10 Privacy-manifest coverage** (F-G1, F-G2) — list the required-reason APIs used by our sources and the Readium modules we link at the pinned version, add any missing declarations (System Boot Time if confirmed), and extend `check-compliance.sh` to grep our sources for required-reason APIs and fail when the manifest lacks the category; prove each compliance check fails on a deliberately broken branch. Re-check on every Readium bump.
   *Done when:* CI fails on a branch that adds an undeclared `UserDefaults` or `systemUptime` use.
+  *Status:* the check and the Readium review are in. Not yet proven in CI: the check was only run locally against a copy of the sources with an added `systemUptime` (it failed as expected). `UserDefaults` is already declared, so only an undeclared category can fail it. Tick once a throwaway branch shows the CI failure.
 
 ## Phase 3 — Library UI
 

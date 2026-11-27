@@ -61,7 +61,9 @@ One row per book: `bookId` (UNINDEXED), `title`, `author` (`authorRaw` + `author
 ### `series_book`
 `seriesId` · `bookId` (PRIMARY KEY, so a book belongs to at most one series) · `position` (REAL, so 1.5 novellas work; NULL = unnumbered).
 
-Series may also be pre-populated from EPUB metadata (`calibre:series` / `calibre:series_index`, or EPUB 3 `belongs-to-collection` + `collection-type="series"` + `group-position`).
+Series may also be pre-populated from EPUB metadata (`calibre:series` / `calibre:series_index`, or EPUB 3 `belongs-to-collection` + `collection-type="series"` + `group-position`). `LocalBookImporter` does this on import, reusing a series of the same name, and never replaces a series the book is already in.
+
+**Duplicate imports:** a local import whose package identifier matches a local book's (or, without an identifier, whose size and SHA-256 match) throws `BookImportError.duplicate`. The Library then asks: *Replace* updates the existing row in place (same id, so collections, series, bookmarks, reading position, and user-edited fields stay; the old file and cover are deleted), *Keep Both* imports a second book, *Skip* does nothing.
 
 ### `library_source`
 One row per linked source. A user may link any combination of iCloud Drive, Dropbox, and OneDrive, with one root folder each. See [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md).
@@ -104,7 +106,7 @@ Feature code reads and writes through the protocols in `Persistence/Repositories
 |---|---|
 | `BookRepository` | Library list (`LibraryQuery`: sort, direction, search), get/save/delete one book, `markOpened` |
 | `CollectionRepository` | Collections in user order, books in a collection, create/rename/delete/reorder, add/remove books |
-| `SeriesRepository` | Series by name, entries (numbered first, then by title), a book's series, create/rename/delete, `setSeries` (one series per book) |
+| `SeriesRepository` | Series by name, entries (numbered first, then by title), a book's series, create/rename/delete, `findOrCreateSeries` (ignoring case), `setSeries` (one series per book) |
 | `BookmarkRepository` | A book's bookmarks in reading order, add/delete |
 | `ReadingPositionRepository` | Get/save the last position; saving also updates `book.progression` in the same transaction |
 
