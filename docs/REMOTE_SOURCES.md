@@ -151,6 +151,16 @@ Triggered by **Sync Now** in Settings (and pull-to-refresh in the library; `BGAp
 ## Downloading a book (tap in library)
 `DownloadManager` actor: `RemoteSource.download(_:to:progress:)` → temp file → verify size → atomic move to `Books/remote/<bookId>.epub` → set file protection and `isExcludedFromBackup`. Show inline progress; tap again to cancel; open the reader when done. *Remove Download* frees space and keeps metadata, bookmarks and progress, **except for detached books** (see below), which are removed from the library entirely because they can no longer be re-downloaded.
 
+### As implemented (P2.9, `LibraryServices/DownloadManager.swift`)
+- `download(_ bookId:, from: RemoteSource) -> Book`. A book that's downloaded and not `isDownloadStale` is returned as it is. A second call for a book already downloading joins the running download, so it isn't fetched twice.
+- The file goes to `Books/remote/<bookId>.partial` (same volume as the final file). Its size must match `fileSize` from the last sync, otherwise `DownloadError.sizeMismatch` (the file probably changed: sync, then retry). Then `BookFileStore.commitDownload` renames it to `<bookId>.epub`, replacing a stale copy in one step, applies Data Protection, and sets `isExcludedFromBackup`.
+- The book saves `localFilePath`, `downloadState = downloaded`, and `localFileVersion` = the `remoteVersion` the download started at. If a sync moved the version on meanwhile, the copy is already stale.
+- `downloadState` is `downloading` while it runs. On failure it's `failed`; on cancel (`cancel(_:)`, or cancelling the calling task) it goes back to what it was. A stale copy being replaced stays `downloaded` either way, since it's still readable. The partial file is always deleted. The state is restored from a task of its own, because GRDB refuses writes from a cancelled task.
+- Rate limits are retried with the sync's `RetryPolicy`. `needsRelink` is passed on to the caller.
+- `observeProgress()` streams the progress (0…1) of every running download, for the library's badges.
+- `removeDownload(_:)` cancels a running download, then clears `localFilePath`, `localFileVersion`, and `downloadState` before deleting the file, so the database never points at a missing file. A detached book is removed from the library with its file and cover (`.removedFromLibrary`); the UI confirms first. Local imports are refused (`notDownloadable`); they're removed from the library instead.
+- Not yet: the Library's tap-to-download and the *Download* / *Remove Download* menu items (P3.5, P3.6); no source can be linked from the UI until P2.8. Downloads use the adapter's foreground `download`; a background `URLSession` comes with the Dropbox and OneDrive adapters if needed. No free-space check yet: that would add the `DiskSpace` required-reason API (`E174.1`) to the privacy manifest.
+
 ## Unlinking & detached books
 **Decision (owner):** unlinking never touches the user's remote files, and the library keeps only what is still readable.
 
