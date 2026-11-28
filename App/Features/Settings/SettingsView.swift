@@ -10,8 +10,10 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 BookSourcesSection(sources: sources)
-                Section("About") {
+                Section {
                     LabeledContent("Version", value: Self.appVersion)
+                } header: {
+                    Text("About").foregroundStyle(.secondaryText)
                 }
             }
             .navigationTitle("Settings")

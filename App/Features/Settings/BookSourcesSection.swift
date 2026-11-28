@@ -96,11 +96,11 @@ struct BookSourcesSection: View {
     private var syncButton: some View {
         if sync.isSyncing {
             Button("Cancel Sync", role: .destructive) { sync.cancel() }
-        } else {
+        } else if sources.contains(where: { BookSources.isAvailable($0.kind) }) {
+            // Hidden rather than disabled when nothing is linked: a disabled button's text fails the contrast audit.
             Button("Sync Now", systemImage: "arrow.triangle.2.circlepath") {
                 Task { await sync.sync() }
             }
-            .disabled(!sources.contains { BookSources.isAvailable($0.kind) })
         }
     }
 
@@ -131,7 +131,7 @@ struct SourceRow: View {
         HStack(spacing: 12) {
             Image(systemName: kind.systemImage)
                 .frame(width: 28)
-                .foregroundStyle(available ? Color.accentColor : Color.secondaryText)
+                .foregroundStyle(available ? Color.accessibleAccent : Color.secondaryText)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(kind.displayName)

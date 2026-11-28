@@ -91,8 +91,10 @@ struct SourceDetailView: View {
             switch source.status {
             case .needsRelink:
                 Text("The app lost access to this folder. Choose it again to keep syncing.")
+                    .foregroundStyle(.secondaryText)
             case .error:
                 Text(source.lastSyncError ?? String(localized: "The last sync didn't finish."))
+                    .foregroundStyle(.secondaryText)
             case .ok:
                 EmptyView()
             }

@@ -53,5 +53,6 @@ struct RootView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        .tint(.accessibleAccent)
     }
 }

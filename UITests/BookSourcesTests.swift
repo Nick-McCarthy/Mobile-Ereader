@@ -16,7 +16,7 @@ final class BookSourcesTests: XCTestCase {
         XCTAssertTrue(element(app, containing: "Dropbox").exists)
         XCTAssertTrue(element(app, containing: "OneDrive").exists)
         XCTAssertTrue(element(app, containing: "Coming in a later version").exists)
-        XCTAssertFalse(app.buttons["Sync Now"].isEnabled, "nothing is linked, so there is nothing to sync")
+        XCTAssertFalse(app.buttons["Sync Now"].exists, "nothing is linked, so there is nothing to sync")
         try auditAccessibility(app)
     }
 
