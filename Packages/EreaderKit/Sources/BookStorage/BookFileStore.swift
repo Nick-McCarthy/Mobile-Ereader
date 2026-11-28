@@ -63,6 +63,44 @@ public struct BookFileStore: Sendable {
         return path
     }
 
+    /// Where a download of the book is written before it is complete: `Books/remote/<bookId>.partial`.
+    /// It's on the same volume as the final file, so committing it is a rename.
+    public func partialDownloadURL(bookId: String) throws -> URL {
+        let directory = url(forBookPath: Self.remoteBooksDirectory)
+        try FileProtection.createDirectory(at: directory)
+        return directory.appendingPathComponent("\(try Self.safeFileName(bookId)).partial", isDirectory: false)
+    }
+
+    /// Moves a finished download to `Books/remote/<bookId>.epub`, replacing any older copy in one step, applies
+    /// Data Protection, and excludes it from backups (it can be downloaded again). Returns the stored path.
+    public func commitDownload(from partial: URL, bookId: String) throws -> String {
+        let path = "\(Self.remoteBooksDirectory)/\(try Self.safeFileName(bookId)).epub"
+        let destination = url(forBookPath: path)
+        try FileProtection.createDirectory(at: destination.deletingLastPathComponent())
+        if FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
+            _ = try FileManager.default.replaceItemAt(destination, withItemAt: partial)
+        } else {
+            try FileManager.default.moveItem(at: partial, to: destination)
+        }
+        try FileProtection.apply(to: destination)
+        try setExcludedFromBackup(true, bookPath: path)
+        return path
+    }
+
+    /// Includes or excludes a stored book from device backups. Downloads are excluded; a detached book's file
+    /// is the only copy, so it is included again (P2.10).
+    public func setExcludedFromBackup(_ excluded: Bool, bookPath path: String) throws {
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = excluded
+        var fileURL = url(forBookPath: path)
+        try fileURL.setResourceValues(values)
+    }
+
+    /// The size of a file in bytes, or nil if it can't be read.
+    public static func size(of fileURL: URL) -> Int64? {
+        (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { $0 }.map(Int64.init)
+    }
+
     /// Writes a cover thumbnail to `Caches/Covers/<bookId>.jpg` and returns the stored path.
     public func saveCover(_ jpeg: Data, bookId: String) throws -> String {
         let path = "\(try Self.safeFileName(bookId)).jpg"

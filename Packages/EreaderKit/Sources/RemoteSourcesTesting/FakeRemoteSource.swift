@@ -35,6 +35,9 @@ public actor FakeRemoteSource: RemoteSource {
     private var rateLimitRetryAfter: Double?
     private var authExpired = false
     private var failAfterPages: Int?
+    private var downloadsHeld = false
+    /// Downloads that have started and are waiting on `holdDownloads()`.
+    public private(set) var heldDownloads = 0
 
     public init(
         kind: SourceKind = .dropbox,
@@ -98,6 +101,15 @@ public actor FakeRemoteSource: RemoteSource {
         failAfterPages = pages
     }
 
+    /// Downloads wait (after reporting progress 0.5) until `releaseDownloads()`. They can be cancelled meanwhile.
+    public func holdDownloads() {
+        downloadsHeld = true
+    }
+
+    public func releaseDownloads() {
+        downloadsHeld = false
+    }
+
     // MARK: RemoteSource
 
     public func link() async throws -> LinkedAccount {
@@ -158,6 +170,14 @@ public actor FakeRemoteSource: RemoteSource {
         guard let item = items[file.remoteId] else { throw RemoteSourceError.notFound }
         downloadCount += 1
         progress(0)
+        if downloadsHeld {
+            progress(0.5)
+            heldDownloads += 1
+            defer { heldDownloads -= 1 }
+            while downloadsHeld {
+                try await Task.sleep(for: .milliseconds(2))
+            }
+        }
         try item.data.write(to: destination)
         progress(1)
     }
