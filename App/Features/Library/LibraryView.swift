@@ -1,17 +1,21 @@
 import BookStorage
 import Core
+import LibraryServices
 import Persistence
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Library tab. For now a plain list with Files import (P1.5); the grid, list, and collections views,
-/// sort, and search arrive in Phase 3 (docs/UI_SPEC.md).
+/// Library tab: the grid or list of books (P3.1), Files import (P1.5), and pull to refresh (P2.8). Sort, search,
+/// the collections view, and tapping a book arrive with the rest of Phase 3 (docs/UI_SPEC.md#library).
 struct LibraryView: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(BookImportController.self) private var importController
     @Environment(SyncCoordinator.self) private var sync
     @AppStorage("authorDisplayFormat") private var authorFormat = AuthorDisplayFormat.asStored
+    @AppStorage(LibraryViewMode.storageKey) private var viewMode = LibraryViewMode.grid
     @State private var books: [Book] = []
+    /// Running downloads (0…1), from `DownloadManager`.
+    @State private var downloadProgress: [Book.ID: Double] = [:]
     @State private var showingImporter = false
 
     var body: some View {
@@ -25,10 +29,24 @@ struct LibraryView: View {
                             .foregroundStyle(.secondaryText)
                     )
                 } else {
-                    List(books) { book in
-                        BookRow(book: book, authorFormat: authorFormat, files: environment?.files)
+                    switch viewMode {
+                    case .grid:
+                        LibraryGridView(
+                            books: books,
+                            downloadProgress: downloadProgress,
+                            authorFormat: authorFormat,
+                            files: environment?.files
+                        )
+                        .refreshable { await sync.sync() }
+                    case .list:
+                        LibraryListView(
+                            books: books,
+                            downloadProgress: downloadProgress,
+                            authorFormat: authorFormat,
+                            files: environment?.files
+                        )
+                        .refreshable { await sync.sync() }
                     }
-                    .refreshable { await sync.sync() }
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) { SyncBanner() }
@@ -46,6 +64,9 @@ struct LibraryView: View {
             }
             .navigationTitle("Library")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    LibraryViewModeMenu(mode: $viewMode)
+                }
                 ToolbarItem(placement: .primaryAction) {
                     if importController.isImporting {
                         ProgressView().accessibilityLabel("Importing Books")
@@ -82,6 +103,12 @@ struct LibraryView: View {
                 books = []
             }
         }
+        .task {
+            guard let environment else { return }
+            for await latest in environment.downloads.observeProgress() {
+                downloadProgress = latest
+            }
+        }
     }
 }
 
@@ -90,51 +117,5 @@ extension LibraryView {
     fileprivate func importPicked(_ result: Result<[URL], any Error>) {
         guard case .success(let urls) = result else { return }
         Task { await importController.importBooks(urls) }
-    }
-}
-
-/// One book in the temporary list: cover thumbnail, title, and author in the chosen format.
-private struct BookRow: View {
-    let book: Book
-    let authorFormat: AuthorDisplayFormat
-    let files: BookFileStore?
-
-    var body: some View {
-        HStack(spacing: 12) {
-            cover
-                .frame(width: 44, height: 66)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(book.title).font(.headline).lineLimit(2)
-                Text(AuthorNameFormatter.string(for: book.authorName, in: authorFormat))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondaryText)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    @State private var loadedCover: UIImage?
-
-    private var coverURL: URL? {
-        guard let path = book.coverPath, let files else { return nil }
-        return files.url(forCoverPath: path)
-    }
-
-    /// Decorative: the row's text already names the book, so VoiceOver skips it.
-    private var cover: some View {
-        Group {
-            if let image = loadedCover ?? coverURL.flatMap(CoverImageCache.shared.cachedImage(at:)) {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                Rectangle().fill(.quaternary).overlay(Image(systemName: "book.closed").foregroundStyle(.secondary))
-            }
-        }
-        .accessibilityHidden(true)
-        .task(id: coverURL) {
-            loadedCover = nil
-            guard let coverURL else { return }
-            loadedCover = await CoverImageCache.shared.image(at: coverURL)
-        }
     }
 }

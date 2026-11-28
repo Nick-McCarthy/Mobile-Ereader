@@ -84,7 +84,8 @@ From [`audit-stage-1-findings.md`](audit-stage-1-findings.md). High before P2.5;
 
 ## Phase 3 — Library UI
 
-- [ ] **P3.1 Grid & List views** with download state badges, placeholder covers, progress %.
+- [x] **P3.1 Grid & List views** with download state badges, placeholder covers, progress %.
+  *Status:* done. Grid and list with a persisted *View* menu, generated placeholder covers, download badges driven by `DownloadManager` progress, and reading progress. Details in [`UI_SPEC.md`](UI_SPEC.md#library) (as implemented, P3.1). The source glyph and detached/missing details in rows come with P3.6 and P3.7.
 - [ ] **P3.2 Sort menu** — Recently viewed, Title, Author, Publication date, Downloaded/Not downloaded; asc/desc; persisted.
 - [ ] **P3.3 Search bar** — FTS5-backed, debounced, both author orders.
 - [ ] **P3.4 Collections view mode** — grouped accordion inside the library (shares component with P4.1).

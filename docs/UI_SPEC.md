@@ -13,7 +13,7 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
   - Long explanations go in a footnote row, not a section footer, which the audit reports as not fully scaling.
   - Section headers use `.secondaryText`.
   - Hide an action that can't be used rather than disabling it, since disabled text fails the contrast check.
-- **Accessibility audit:** `auditAccessibility(_:)` (`UITests/AuditSupport.swift`) runs `performAccessibilityAudit()` and reports every issue in one failure, on one line (xcbeautify shows only a failure's first line), each naming its element. It covers the Library, empty and with a book (`AccessibilityAuditTests`), Settings, and the source detail screen (`BookSourcesTests`). Add new screens.
+- **Accessibility audit:** `auditAccessibility(_:)` (`UITests/AuditSupport.swift`) runs `performAccessibilityAudit()` and reports every issue in one failure, on one line (xcbeautify shows only a failure's first line), each naming its element. It covers the Library, empty and as a grid and a list of books (`AccessibilityAuditTests`), Settings, and the source detail screen (`BookSourcesTests`). Add new screens.
 - Decorative images (covers beside a title) are hidden from VoiceOver; progress indicators have a label.
 
 ## Library
@@ -36,6 +36,15 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
 - **Empty state:** explains how to add books, with buttons for *Connect iCloud Drive*, *Connect Dropbox*, *Connect OneDrive*, and *Import a File*.
 - **Source indicator:** a small source glyph (iCloud / Dropbox / OneDrive / device) in list rows and the Edit Details sheet. Detached books show the glyph crossed out, with "Not linked" in Edit Details. *Missing from source* books show a subtle badge.
 - **Sync banner:** slim progress banner at top while a sync is running.
+- **As implemented (P3.1):**
+  - `LibraryViewMode` (`grid` / `list`, `@AppStorage("libraryViewMode")`, grid by default) is picked from the *View* menu at the leading edge of the toolbar. Both views pull to refresh.
+  - `LibraryGridView`: `LazyVGrid` with adaptive columns of at least 110 pt. The width isn't scaled with Dynamic Type: when larger type changes the column count, cells move rows and the audit reports their text as not supporting Dynamic Type. The list view suits the largest sizes. Each cell is the cover, the title, and the author, wrapped rather than line-limited, because the audit reports a line limit as text that won't grow with Dynamic Type.
+  - `LibraryListView`: plain `List`; each row has the cover (44 pt wide, scaled), title, author, a "1971 · 42%" line (year and reading progress, each left out when unknown), and the status glyph.
+  - `BookCover` (shared by both, and later by Collections) shows the extracted cover from `CoverImageCache`, or the generated placeholder: title and author in white on one of eight dark tints, drawn in a `Canvas` so the audit doesn't treat the cover-sized type as text that ignores Dynamic Type, picked by `PlaceholderCover.tintIndex` (FNV-1a of the title, stable across launches).
+  - Download state comes from `Book.fileStatus(downloadProgress:)` (Persistence), using the live progress from `DownloadManager.observeProgress()`: no glyph when downloaded; `icloud.and.arrow.down` when not; a progress ring while downloading; `exclamationmark.icloud` when it failed; `questionmark.folder` when the file is missing from its source and there's no downloaded copy. On the grid the glyph sits on a small material disc in the cover's top corner.
+  - Reading progress is `Book.readingPercent`: nil until started, at least 1 %, and 100 % only when finished.
+  - VoiceOver reads each cell or row as one element: label "Title, Author", value such as "Not downloaded" or "Downloaded, 42% read, Published 1971". Covers and glyphs are hidden.
+  - UI tests: `-UITestSeedBooks` seeds four books (downloaded and part-read, placeholder not downloaded, failed, missing), and `AccessibilityAuditTests` audits the grid and the list. UI-test launches reset the view mode.
 
 ## Collections tab
 Chosen layout: **collapsible sections (accordion) inside a `List`** with `.listStyle(.insetGrouped)` — native, VoiceOver-friendly, comfortable one-handed.

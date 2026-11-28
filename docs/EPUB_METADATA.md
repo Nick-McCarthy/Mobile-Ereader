@@ -1,6 +1,6 @@
 # EPUB Metadata Extraction
 
-Fields required by the concept: **title, author, publication date, cover**. Any missing field uses a placeholder: `Unknown Title`, `Unknown Author`, `Unknown` (date), and a generated placeholder cover (title + author on a tinted background derived from a hash of the title).
+Fields required by the concept: **title, author, publication date, cover**. Any missing field uses a placeholder: `Unknown Title`, `Unknown Author`, `Unknown` (date), and a generated placeholder cover (title + author on a tinted background derived from a hash of the title: FNV-1a in `Core.PlaceholderCover`, since Swift's `Hasher` changes seed every launch).
 
 ## Parsing steps
 1. Read `META-INF/container.xml` → first `<rootfile full-path="…">` → the OPF package document.
