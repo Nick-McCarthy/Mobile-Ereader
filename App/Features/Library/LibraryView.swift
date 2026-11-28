@@ -5,14 +5,16 @@ import Persistence
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Library tab: the grid or list of books (P3.1), Files import (P1.5), and pull to refresh (P2.8). Sort, search,
-/// the collections view, and tapping a book arrive with the rest of Phase 3 (docs/UI_SPEC.md#library).
+/// Library tab: the grid or list of books (P3.1), sorted (P3.2), Files import (P1.5), and pull to refresh (P2.8).
+/// Search, the collections view, and tapping a book arrive with the rest of Phase 3 (docs/UI_SPEC.md#library).
 struct LibraryView: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(BookImportController.self) private var importController
     @Environment(SyncCoordinator.self) private var sync
     @AppStorage("authorDisplayFormat") private var authorFormat = AuthorDisplayFormat.asStored
     @AppStorage(LibraryViewMode.storageKey) private var viewMode = LibraryViewMode.grid
+    @AppStorage(LibrarySortMenu.sortKey) private var sort = LibrarySortOrder.recentlyViewed
+    @AppStorage(LibrarySortMenu.reversedKey) private var sortReversed = false
     @State private var books: [Book] = []
     /// Running downloads (0…1), from `DownloadManager`.
     @State private var downloadProgress: [Book.ID: Double] = [:]
@@ -64,8 +66,9 @@ struct LibraryView: View {
             }
             .navigationTitle("Library")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarLeading) {
                     LibraryViewModeMenu(mode: $viewMode)
+                    LibrarySortMenu(sort: $sort, reversed: $sortReversed)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     if importController.isImporting {
@@ -93,10 +96,11 @@ struct LibraryView: View {
                 Text(importController.errorMessage ?? "")
             }
         }
-        .task {
+        // Restarts the observation whenever the sort changes.
+        .task(id: query) {
             guard let environment else { return }
             do {
-                for try await latest in environment.repositories.books.observeLibrary(LibraryQuery()) {
+                for try await latest in environment.repositories.books.observeLibrary(query) {
                     books = latest
                 }
             } catch {
@@ -113,6 +117,10 @@ struct LibraryView: View {
 }
 
 extension LibraryView {
+    fileprivate var query: LibraryQuery {
+        LibraryQuery(sort: sort, reversed: sortReversed)
+    }
+
     /// The picker's URLs are security-scoped; the importer opens and closes access around its copy.
     fileprivate func importPicked(_ result: Result<[URL], any Error>) {
         guard case .success(let urls) = result else { return }

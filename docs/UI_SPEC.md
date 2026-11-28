@@ -36,6 +36,10 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
 - **Empty state:** explains how to add books, with buttons for *Connect iCloud Drive*, *Connect Dropbox*, *Connect OneDrive*, and *Import a File*.
 - **Source indicator:** a small source glyph (iCloud / Dropbox / OneDrive / device) in list rows and the Edit Details sheet. Detached books show the glyph crossed out, with "Not linked" in Edit Details. *Missing from source* books show a subtle badge.
 - **Sync banner:** slim progress banner at top while a sync is running.
+- **As implemented (P3.2):**
+  - `LibrarySortMenu`, next to the *View* menu, has two pickers: *Sort By* (Recently Viewed, Title, Author, Publication Date, Downloaded) and *Order*, whose two choices are named for the key (Most Recent First / Least Recent First, A to Z / Z to A, Oldest First / Newest First, Downloaded First / Not Downloaded First). The natural direction is the first.
+  - Both are kept in `@AppStorage` (`librarySort`, `librarySortReversed`); the default is Recently Viewed, most recent first. The library's observation restarts with the new `LibraryQuery` when either changes. The ordering itself is the repository's (`DatabaseBookRepository.orderClause`, rules in [`DATA_MODEL.md`](DATA_MODEL.md#display-rules)).
+  - UI test: `LibrarySortTests` sorts the seeded books by title both ways (the placeholder title stays last) and audits the screen. Book cells and rows have the identifier `library-book`.
 - **As implemented (P3.1):**
   - `LibraryViewMode` (`grid` / `list`, `@AppStorage("libraryViewMode")`, grid by default) is picked from the *View* menu at the leading edge of the toolbar. Both views pull to refresh.
   - `LibraryGridView`: `LazyVGrid` with adaptive columns of at least 110 pt. The width isn't scaled with Dynamic Type: when larger type changes the column count, cells move rows and the audit reports their text as not supporting Dynamic Type. The list view suits the largest sizes. Each cell is the cover, the title, and the author, wrapped rather than line-limited, because the audit reports a line limit as text that won't grow with Dynamic Type.

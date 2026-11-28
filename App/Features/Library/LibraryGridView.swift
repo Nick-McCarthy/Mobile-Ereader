@@ -59,5 +59,6 @@ private struct LibraryGridCell: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibility.label)
         .accessibilityValue(accessibility.value)
+        .accessibilityIdentifier("library-book")
     }
 }
