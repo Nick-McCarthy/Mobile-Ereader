@@ -27,7 +27,9 @@ extension XCTestCase {
     private static func isKnownSystemIssue(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
         switch issue.auditType {
         case .hitRegion: issue.element?.label == "Clear text"
-        case .textClipped: issue.element?.elementType == .searchField
+        // The audit sometimes reports this one without an element, so match on its description too.
+        case .textClipped:
+            issue.element?.elementType == .searchField || issue.detailedDescription.contains("UISearchBarTextField")
         default: false
         }
     }
