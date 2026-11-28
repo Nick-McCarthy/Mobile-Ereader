@@ -30,19 +30,25 @@ struct LibraryView: View {
                 if books.isEmpty, !searchQuery.isEmpty {
                     // Not `ContentUnavailableView.search`: its description uses the system secondary colour,
                     // which the accessibility audit flags for contrast.
-                    ContentUnavailableView(
-                        "No Results",
-                        systemImage: "magnifyingglass",
-                        description: Text("No books match “\(searchQuery)”. Check the spelling or try other words.")
-                            .foregroundStyle(.secondaryText)
-                    )
+                    ScrollableUnavailableView {
+                        ContentUnavailableView(
+                            "No Results",
+                            systemImage: "magnifyingglass",
+                            description: Text("No books match “\(searchQuery)”. Check the spelling or try other words.")
+                                .foregroundStyle(.secondaryText)
+                        )
+                    }
                 } else if books.isEmpty {
-                    ContentUnavailableView(
-                        "No Books Yet",
-                        systemImage: "books.vertical",
-                        description: Text("Import an EPUB or connect iCloud Drive, Dropbox, or OneDrive in Settings.")
+                    ScrollableUnavailableView {
+                        ContentUnavailableView(
+                            "No Books Yet",
+                            systemImage: "books.vertical",
+                            description: Text(
+                                "Import an EPUB or connect iCloud Drive, Dropbox, or OneDrive in Settings."
+                            )
                             .foregroundStyle(.secondaryText)
-                    )
+                        )
+                    }
                 } else {
                     switch viewMode {
                     case .grid:
@@ -65,7 +71,8 @@ struct LibraryView: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) { SyncBanner() }
-            .searchable(text: $searchText, prompt: "Title, author, series, or collection")
+            // The default "Search" prompt: a longer one is clipped at large Dynamic Type sizes.
+            .searchable(text: $searchText)
             .task(id: searchText) { await debounceSearch() }
             // On the content rather than the stack, so it doesn't share a view with the error alert.
             .alert(
@@ -154,5 +161,19 @@ extension LibraryView {
     fileprivate func importPicked(_ result: Result<[URL], any Error>) {
         guard case .success(let urls) = result else { return }
         Task { await importController.importBooks(urls) }
+    }
+}
+
+/// Centres an empty state in the space it has, and scrolls when larger Dynamic Type makes it taller than that,
+/// so the text is never clipped (the search bar leaves less room).
+private struct ScrollableUnavailableView<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        GeometryReader { proxy in
+            ScrollView {
+                content.frame(maxWidth: .infinity, minHeight: proxy.size.height)
+            }
+        }
     }
 }

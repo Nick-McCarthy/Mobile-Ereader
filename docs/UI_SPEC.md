@@ -13,7 +13,8 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
   - Long explanations go in a footnote row, not a section footer, which the audit reports as not fully scaling.
   - Section headers use `.secondaryText`.
   - Hide an action that can't be used rather than disabling it, since disabled text fails the contrast check.
-- **Accessibility audit:** `auditAccessibility(_:)` (`UITests/AuditSupport.swift`) runs `performAccessibilityAudit()` and reports every issue in one failure, on one line (xcbeautify shows only a failure's first line), each naming its element. It covers the Library, empty and as a grid and a list of books (`AccessibilityAuditTests`), Settings, and the source detail screen (`BookSourcesTests`). Add new screens.
+- **Empty states** (`ContentUnavailableView`) sit in a scroll view sized to the screen, so they stay centred but scroll instead of clipping at large Dynamic Type sizes.
+- **Accessibility audit:** `auditAccessibility(_:)` (`UITests/AuditSupport.swift`) runs `performAccessibilityAudit()` and reports every issue in one failure, on one line (xcbeautify shows only a failure's first line), each naming its element. It covers the Library, empty and as a grid and a list of books (`AccessibilityAuditTests`), Settings, and the source detail screen (`BookSourcesTests`). Add new screens. The only exclusion is UIKit's search-field clear button (×), whose 20 pt hit area the app can't change.
 - Decorative images (covers beside a title) are hidden from VoiceOver; progress indicators have a label.
 
 ## Library
@@ -37,7 +38,7 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
 - **Source indicator:** a small source glyph (iCloud / Dropbox / OneDrive / device) in list rows and the Edit Details sheet. Detached books show the glyph crossed out, with "Not linked" in Edit Details. *Missing from source* books show a subtle badge.
 - **Sync banner:** slim progress banner at top while a sync is running.
 - **As implemented (P3.3):**
-  - `.searchable` on the library, prompt "Title, author, series, or collection". The typed text reaches `LibraryQuery.searchText` after a 150 ms pause (`task(id:)` restarts on each keystroke, which cancels the wait); clearing the field applies at once. The query and its ordering are the repository's FTS5 search ([`DATA_MODEL.md`](DATA_MODEL.md#repositories)), which matches every word as a prefix, so "ursula le guin" and "le guin, ursula" both find a book stored either way.
+  - `.searchable` on the library, with the default "Search" prompt (a longer one is clipped at large Dynamic Type sizes). The typed text reaches `LibraryQuery.searchText` after a 150 ms pause (`task(id:)` restarts on each keystroke, which cancels the wait); clearing the field applies at once. The query and its ordering are the repository's FTS5 search ([`DATA_MODEL.md`](DATA_MODEL.md#repositories)), which matches every word as a prefix, so "ursula le guin" and "le guin, ursula" both find a book stored either way.
   - No matches shows "No Results" with the text searched for. It's a plain `ContentUnavailableView` rather than `ContentUnavailableView.search`, whose description uses the system secondary colour that the audit flags for contrast.
   - Tests: `RepositoryTests` (both name orders, both stored formats, series names, a live search updating); UI test `LibrarySearchTests` (both name orders, "No Results" with an audit, clearing restores every book).
 - **As implemented (P3.2):**

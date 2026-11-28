@@ -8,6 +8,7 @@ extension XCTestCase {
     func auditAccessibility(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) throws {
         var issues: [String] = []
         try app.performAccessibilityAudit { issue in
+            if Self.isKnownSystemIssue(issue) { return true }
             let element = issue.element.map { "\($0.elementType.rawValue) \"\($0.label)\" \($0.frame)" } ?? "no element"
             issues.append("\(issue.compactDescription) on \(element): \(issue.detailedDescription)")
             return true
@@ -17,5 +18,12 @@ extension XCTestCase {
             let report = "\(issues.count) accessibility issue(s): " + issues.joined(separator: " | ")
             XCTFail(report, file: file, line: line)
         }
+    }
+
+    /// Issues in UIKit's own controls that the app can't change: the search field's clear button (×) is 20 pt,
+    /// under the audit's minimum hit area. Each exclusion is listed in docs/UI_SPEC.md#all-screens.
+    @MainActor
+    private static func isKnownSystemIssue(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
+        issue.auditType == .hitRegion && issue.element?.label == "Clear text"
     }
 }
