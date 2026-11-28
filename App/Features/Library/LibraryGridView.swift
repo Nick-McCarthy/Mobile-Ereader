@@ -3,7 +3,7 @@ import Core
 import Persistence
 import SwiftUI
 
-/// The library's grid: covers in adaptive columns (about 110 pt, wider with larger text), title and author
+/// The library's grid: covers in adaptive columns of about 110 pt, title and author
 /// under each (wrapped, not truncated: the audit flags a line limit as clipping at large Dynamic Type sizes), and
 /// a download badge on the cover. See docs/UI_SPEC.md#library.
 struct LibraryGridView: View {
@@ -11,7 +11,10 @@ struct LibraryGridView: View {
     let downloadProgress: [Book.ID: Double]
     let authorFormat: AuthorDisplayFormat
     let files: BookFileStore?
-    @ScaledMetric(relativeTo: .subheadline) private var columnWidth = 110
+    /// Not scaled with Dynamic Type: when larger type changes the column count, cells move to other rows, and the
+    /// accessibility audit reports their text as not supporting Dynamic Type. Captions wrap instead, and the list
+    /// view suits the largest sizes better.
+    private let columnWidth: CGFloat = 110
 
     var body: some View {
         ScrollView {
