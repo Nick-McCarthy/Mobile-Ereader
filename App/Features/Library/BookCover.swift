@@ -41,6 +41,8 @@ struct BookCover: View {
 }
 
 /// Title and author on a dark tint, sized to the cover so it reads the same in a grid cell and a list row.
+/// Drawn in a `Canvas`, so the text is part of the picture rather than text elements: the cover is decorative,
+/// and its type is sized to the cover rather than to Dynamic Type, which the accessibility audit would flag.
 private struct PlaceholderCoverView: View {
     let title: String
     let author: String
@@ -59,23 +61,28 @@ private struct PlaceholderCoverView: View {
 
     var body: some View {
         let tint = Self.tints[PlaceholderCover.tintIndex(for: title, count: Self.tints.count)]
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            VStack(spacing: width * 0.06) {
-                Text(title)
-                    .font(.system(size: max(width * 0.12, 5), weight: .semibold, design: .serif))
-                    .lineLimit(4)
-                if width >= 60 {
-                    Text(author)
-                        .font(.system(size: max(width * 0.08, 5)))
-                        .lineLimit(2)
-                }
+        Canvas { context, size in
+            let padding = size.width * 0.08
+            let inner = CGSize(width: size.width - padding * 2, height: size.height - padding * 2)
+            guard inner.width > 0, inner.height > 0 else { return }
+
+            var authorHeight: CGFloat = 0
+            if size.width >= 60 {
+                var author = context.resolve(Text(self.author).font(.system(size: size.width * 0.08)))
+                author.shading = .color(.white)
+                let measured = author.measure(in: CGSize(width: inner.width, height: inner.height * 0.3))
+                authorHeight = measured.height + padding
+                let origin = CGPoint(x: (size.width - measured.width) / 2, y: size.height - padding - measured.height)
+                context.draw(author, in: CGRect(origin: origin, size: measured))
             }
-            .multilineTextAlignment(.center)
-            .minimumScaleFactor(0.6)
-            .foregroundStyle(.white)
-            .padding(width * 0.08)
-            .frame(width: width, height: proxy.size.height)
+
+            let titleFont = Font.system(size: max(size.width * 0.12, 5), weight: .semibold, design: .serif)
+            var title = context.resolve(Text(self.title).font(titleFont))
+            title.shading = .color(.white)
+            let room = CGSize(width: inner.width, height: inner.height - authorHeight)
+            let measured = title.measure(in: room)
+            let origin = CGPoint(x: (size.width - measured.width) / 2, y: padding + (room.height - measured.height) / 2)
+            context.draw(title, in: CGRect(origin: origin, size: measured))
         }
         .background(tint.gradient)
     }

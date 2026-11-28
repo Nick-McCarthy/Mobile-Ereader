@@ -4,7 +4,8 @@ import Persistence
 import SwiftUI
 
 /// The library's grid: covers in adaptive columns (about 110 pt, wider with larger text), title and author
-/// under each, and a download badge on the cover. See docs/UI_SPEC.md#library.
+/// under each (wrapped, not truncated: the audit flags a line limit as clipping at large Dynamic Type sizes), and
+/// a download badge on the cover. See docs/UI_SPEC.md#library.
 struct LibraryGridView: View {
     let books: [Book]
     let downloadProgress: [Book.ID: Double]
@@ -43,11 +44,9 @@ private struct LibraryGridCell: View {
                 .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
             Text(book.title)
                 .font(.subheadline.weight(.medium))
-                .lineLimit(2)
             Text(AuthorNameFormatter.string(for: book.authorName, in: authorFormat))
                 .font(.caption)
                 .foregroundStyle(.secondaryText)
-                .lineLimit(1)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibility.label)
