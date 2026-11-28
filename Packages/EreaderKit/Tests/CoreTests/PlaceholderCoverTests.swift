@@ -6,7 +6,7 @@ struct PlaceholderCoverTests {
     @Test("The tint is stable and in range")
     func stableTint() {
         // FNV-1a of "" is the offset basis; pinned so a change to the hash (and every book's colour) is noticed.
-        #expect(PlaceholderCover.tintIndex(for: "", count: 1_000) == Int(0xcbf2_9ce4_8422_2325 % 1_000))
+        #expect(PlaceholderCover.tintIndex(for: "", count: 1_000) == Int(UInt64(0xcbf2_9ce4_8422_2325) % 1_000))
         for title in ["Unknown Title", "The Tombs of Atuan", "Anathem", "Théâtre Noir"] {
             let index = PlaceholderCover.tintIndex(for: title, count: 8)
             #expect((0..<8).contains(index))
