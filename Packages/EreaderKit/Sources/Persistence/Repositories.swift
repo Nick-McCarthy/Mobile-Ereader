@@ -176,6 +176,8 @@ public protocol LibrarySourceRepository: Sendable {
         rootBookmark: Data?,
         rootDisplayPath: String
     ) async throws
+    /// Saves a re-created iCloud folder bookmark (the system reported the old one stale). Keeps the cursor.
+    func saveRootBookmark(id: LibrarySource.ID, bookmark: Data?) async throws
     /// After a complete sync: saves the cursor, marks the source healthy, and clears any error.
     func recordSyncSuccess(id: LibrarySource.ID, cursor: String?, at date: Date) async throws
     /// After a failed sync. The cursor is left as it was, so the next sync repeats the work.

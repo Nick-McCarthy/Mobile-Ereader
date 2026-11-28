@@ -15,8 +15,20 @@ struct AppEnvironment: Sendable {
     let uiTestSeedBook: Book?
     /// Removes detached books whose file is gone (docs/REMOTE_SOURCES.md#unlinking--detached-books).
     let detachedBookCheck: DetachedBookCheck
+    let bookSources: BookSources
+    let syncEngine: SyncEngine
+    let downloads: DownloadManager
+    let unlinker: SourceUnlinker
+    /// UI tests only (`-UITestLinkedFolder`): an empty folder to link as the iCloud source at launch.
+    let uiTestLinkedFolder: URL?
 
-    init(database: AppDatabase, files: BookFileStore, usesKeychain: Bool = true, uiTestSeedBook: Book? = nil) {
+    init(
+        database: AppDatabase,
+        files: BookFileStore,
+        usesKeychain: Bool = true,
+        uiTestSeedBook: Book? = nil,
+        uiTestLinkedFolder: URL? = nil
+    ) {
         self.repositories = DatabaseRepositories(database: database)
         self.files = files
         self.importer = LocalBookImporter(books: repositories.books, series: repositories.series, files: files)
@@ -25,12 +37,24 @@ struct AppEnvironment: Sendable {
         self.tokenCleanup = stores.map { OrphanedTokenCleanup(sources: sources, stores: $0) }
         self.uiTestSeedBook = uiTestSeedBook
         self.detachedBookCheck = DetachedBookCheck(books: repositories.books, files: files)
+        self.bookSources = BookSources(sources: sources)
+        self.syncEngine = SyncEngine(
+            books: repositories.books,
+            series: repositories.series,
+            sources: sources,
+            files: files
+        )
+        let downloads = DownloadManager(books: repositories.books, files: files)
+        self.downloads = downloads
+        self.unlinker = SourceUnlinker(books: repositories.books, sources: sources, files: files, downloads: downloads)
+        self.uiTestLinkedFolder = uiTestLinkedFolder
     }
 
     /// One-off work at launch: seeds the UI-test book, removes Keychain tokens left by an earlier install
     /// (finding F-A1), and removes detached books whose file is gone.
     func prepareAtLaunch() async {
         if let uiTestSeedBook { try? await repositories.books.save(uiTestSeedBook) }
+        if let uiTestLinkedFolder { _ = try? await bookSources.linkFolder(at: uiTestLinkedFolder) }
         _ = try? await tokenCleanup?.run()
         _ = try? await detachedBookCheck.run()
     }
@@ -53,11 +77,18 @@ struct AppEnvironment: Sendable {
                 caches: root.appendingPathComponent("Caches", isDirectory: true)
             )
             let seed = arguments.contains("-UITestSeedBook") ? uiTestBook : nil
+            var folder: URL?
+            if arguments.contains("-UITestLinkedFolder") {
+                let books = root.appendingPathComponent("UITest Books", isDirectory: true)
+                try FileManager.default.createDirectory(at: books, withIntermediateDirectories: true)
+                folder = books
+            }
             return AppEnvironment(
                 database: try AppDatabase.inMemory(),
                 files: files,
                 usesKeychain: false,
-                uiTestSeedBook: seed
+                uiTestSeedBook: seed,
+                uiTestLinkedFolder: folder
             )
         }
         return AppEnvironment(database: try AppDatabase.onDisk(at: AppDatabase.defaultURL()), files: try .standard())

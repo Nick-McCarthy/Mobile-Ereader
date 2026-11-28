@@ -6,7 +6,14 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
 
 ## All screens
 - **Secondary text** (authors, captions, empty-state descriptions) uses `.secondaryText` (`App/Features/SecondaryText.swift`), not the system `.secondary`, which falls just short of 4.5:1 contrast at small sizes.
-- **Accessibility audit:** `UITests/AccessibilityAuditTests` runs `performAccessibilityAudit()` on each screen it covers (today the Library, empty and with a book); a failure names the element. Add new screens to it.
+- **Tint and destructive text:** the app tint is `.accessibleAccent` (set on the `TabView`), and destructive buttons use `.foregroundStyle(.accessibleDestructive)`. Both meet 4.5:1 in light and dark mode; the system blue and red fall just short as text on grouped backgrounds.
+- **Forms:**
+  - Label/value rows use `InfoRow`, which styles the value with `.secondaryText` and combines both into one VoiceOver element, because a bare value such as "0.1.0" isn't a readable label.
+  - Action buttons are text-only: a Form button with an icon keeps its label on one line, which the audit reports as clipped at large Dynamic Type sizes.
+  - Long explanations go in a footnote row, not a section footer, which the audit reports as not fully scaling.
+  - Section headers use `.secondaryText`.
+  - Hide an action that can't be used rather than disabling it, since disabled text fails the contrast check.
+- **Accessibility audit:** `auditAccessibility(_:)` (`UITests/AuditSupport.swift`) runs `performAccessibilityAudit()` and reports every issue in one failure, on one line (xcbeautify shows only a failure's first line), each naming its element. It covers the Library, empty and with a book (`AccessibilityAuditTests`), Settings, and the source detail screen (`BookSourcesTests`). Add new screens.
 - Decorative images (covers beside a title) are hidden from VoiceOver; progress indicators have a label.
 
 ## Library
@@ -46,6 +53,13 @@ Grouped `Form`:
   - Tapping a linked row → detail screen: *Change Folder*, *Sync This Source*, *Unlink*, with a confirmation that states the outcome: not-downloaded books from that source are removed from the library, downloaded books stay (detached), and the remote files aren't changed. See [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#unlinking--detached-books).
   - **Sync Now** button (syncs all linked sources) with live progress per source (found / processed / errors). *Cancel* while running.
   - Footer text: access is read-only, the app never modifies your files, and nothing is sent anywhere except the service you linked. iCloud footer notes that other installed file providers (such as Google Drive) also work through this option.
+- **As implemented (P2.8):**
+  - `BookSourcesSection` shows the three rows. iCloud links through `.fileImporter` for folders, then syncs that source. Dropbox and OneDrive say "Coming in a later version" until P2.5 and P2.6; their sign-in sheet and in-app folder browser come with those adapters.
+  - A linked row shows the folder path and "Synced <relative time>", or the sync's progress while it runs, and a red warning glyph for `needsRelink` or `error`.
+  - `SourceDetailView` has Folder, Last Synced, and (after a sync) Books Found / Couldn't Read, plus *Sync This Source*, *Change Folder…* (*Choose Folder Again…* when access was lost), and *Unlink…*. The unlink confirmation reads: "N books not downloaded will be removed from your library. M downloaded books will stay. Your files in <service> won't be changed."
+  - `SyncCoordinator` (App, `@MainActor @Observable`) runs one sync at a time for *Sync Now*, *Sync This Source*, and pull-to-refresh on the library list, and keeps each source's latest `SyncProgress`. *Cancel Sync* replaces the sync buttons while one runs.
+  - `SyncBanner` sits at the top of the library: "<service>: Looking for books…" / "Reading 12 of 40" while syncing, otherwise "<service> needs to be linked again. Open Settings to choose the folder." when a source is `needsRelink`.
+  - UI tests: `BookSourcesTests` (with `-UITestLinkedFolder`, which links an empty temporary folder at launch) and accessibility audits of Settings and the source detail screen.
 - **Library**
   - *Author name format*: As stored · First Last · Last, First (live preview row using a sample author).
   - *Create Collection…* → name prompt (validates uniqueness).
