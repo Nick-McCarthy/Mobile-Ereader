@@ -183,9 +183,13 @@ public actor DownloadManager {
             let cancelled = error is CancellationError || Task.isCancelled
             // A cancelled update of a stale copy keeps that copy; it's still readable.
             let state: DownloadState = cancelled ? previousState : .failed
-            _ = try? await job.books.updateBook(id: bookId) { book in
-                book.downloadState = book.localFilePath == nil ? state : .downloaded
-            }
+            // In a task of its own: GRDB refuses to write from a cancelled task, and this must still be saved.
+            let books = job.books
+            await Task {
+                _ = try? await books.updateBook(id: bookId) { book in
+                    book.downloadState = book.localFilePath == nil ? state : .downloaded
+                }
+            }.value
             if cancelled { throw CancellationError() }
             throw error
         }
