@@ -108,20 +108,19 @@ struct SourceDetailView: View {
                 Button("Cancel Sync", role: .destructive) { sync.cancel() }
                     .foregroundStyle(.accessibleDestructive)
             } else {
-                Button("Sync This Source", systemImage: "arrow.triangle.2.circlepath") {
+                // Text-only buttons: with an icon, Form keeps the label on one line, which the audit reports as
+                // clipped at large Dynamic Type sizes.
+                Button("Sync This Source") {
                     Task { await sync.sync(only: source.id) }
                 }
             }
-            Button(
-                source.status == .needsRelink ? LocalizedStringKey("Choose Folder Again…") : "Change Folder…",
-                systemImage: "folder"
-            ) {
+            Button(source.status == .needsRelink ? LocalizedStringKey("Choose Folder Again…") : "Change Folder…") {
                 pickingFolder = true
             }
             .disabled(sync.isSyncing)
         }
         Section {
-            Button("Unlink…", systemImage: "link", role: .destructive) {
+            Button("Unlink…", role: .destructive) {
                 Task { await prepareUnlink() }
             }
             .foregroundStyle(.accessibleDestructive)

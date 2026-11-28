@@ -42,5 +42,7 @@ struct InfoRow: View {
         } label: {
             Text(label)
         }
+        // One VoiceOver element ("Version, 0.1.0"): a bare value such as a version number isn't a readable label.
+        .accessibilityElement(children: .combine)
     }
 }

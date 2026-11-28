@@ -103,7 +103,7 @@ struct BookSourcesSection: View {
                 .foregroundStyle(.accessibleDestructive)
         } else if sources.contains(where: { BookSources.isAvailable($0.kind) }) {
             // Hidden rather than disabled when nothing is linked: a disabled button's text fails the contrast audit.
-            Button("Sync Now", systemImage: "arrow.triangle.2.circlepath") {
+            Button("Sync Now") {
                 Task { await sync.sync() }
             }
         }

@@ -28,7 +28,7 @@ final class BookSourcesTests: XCTestCase {
         row.tap()
 
         app.buttons["Sync This Source"].tap()
-        XCTAssertTrue(app.staticTexts["Books Found"].waitForExistence(timeout: 30))
+        XCTAssertTrue(element(app, containing: "Books Found").waitForExistence(timeout: 30))
         try auditAccessibility(app)
 
         app.buttons["Unlink…"].tap()
