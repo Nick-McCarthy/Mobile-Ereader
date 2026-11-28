@@ -176,6 +176,33 @@ struct BookRepositoryTests {
         #expect(try await ids(LibraryQuery(sort: .title, searchText: "dune")) == [])
     }
 
+    @Test("Search finds an author in either name order, whichever order is stored, and finds series names")
+    func searchNameOrdersAndSeries() async throws {
+        try await save(
+            makeBook("firstLast", title: "The Dispossessed", author: "Ursula K. Le Guin"),
+            makeBook("lastFirst", title: "Always Coming Home", author: "Le Guin, Ursula K."),
+            makeBook("other", title: "Anathem", author: "Neal Stephenson")
+        )
+        let series = try await repositories.series.findOrCreateSeries(named: "Hainish Cycle")
+        try await repositories.series.setSeries(series.id, position: 6, forBook: "firstLast")
+
+        for text in ["ursula le guin", "le guin ursula", "Le Guin, Ursula", "urs gui"] {
+            #expect(Set(try await ids(LibraryQuery(sort: .title, searchText: text))) == ["firstLast", "lastFirst"])
+        }
+        #expect(try await ids(LibraryQuery(sort: .title, searchText: "hainish")) == ["firstLast"])
+        #expect(try await ids(LibraryQuery(sort: .title, searchText: "hainish ana")) == [])
+    }
+
+    @Test("A live search updates when a matching book is added")
+    func observeSearch() async throws {
+        try await save(makeBook("a", title: "Anathem", author: "Neal Stephenson"))
+        var iterator = repositories.books.observeLibrary(LibraryQuery(sort: .title, searchText: "steph"))
+            .makeAsyncIterator()
+        #expect(try await iterator.next()?.map(\.id) == ["a"])
+        try await save(makeBook("b", title: "Seveneves", author: "Neal Stephenson"))
+        #expect(try await iterator.next()?.map(\.id) == ["a", "b"])
+    }
+
     @Test("Observing the library yields the current list, then the list after a change")
     func observeLibrary() async throws {
         try await save(makeBook("first", title: "First"))

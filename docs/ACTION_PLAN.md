@@ -88,7 +88,8 @@ From [`audit-stage-1-findings.md`](audit-stage-1-findings.md). High before P2.5;
   *Status:* done. Grid and list with a persisted *View* menu, generated placeholder covers, download badges driven by `DownloadManager` progress, and reading progress. Details in [`UI_SPEC.md`](UI_SPEC.md#library) (as implemented, P3.1). The source glyph and detached/missing details in rows come with P3.6 and P3.7.
 - [x] **P3.2 Sort menu** — Recently viewed, Title, Author, Publication date, Downloaded/Not downloaded; asc/desc; persisted.
   *Status:* done. *Sort* menu with key and direction in `@AppStorage`, driving `LibraryQuery`. Details in [`UI_SPEC.md`](UI_SPEC.md#library) (as implemented, P3.2).
-- [ ] **P3.3 Search bar** — FTS5-backed, debounced, both author orders.
+- [x] **P3.3 Search bar** — FTS5-backed, debounced, both author orders.
+  *Status:* done. `.searchable` with a 150 ms debounce into `LibraryQuery.searchText`, and a "No Results" screen. Details in [`UI_SPEC.md`](UI_SPEC.md#library) (as implemented, P3.3).
 - [ ] **P3.4 Collections view mode** — grouped accordion inside the library (shares component with P4.1).
 - [ ] **P3.5 Tap behaviour** — open if downloaded, otherwise download then open.
 - [ ] **P3.6 Long-press menu** — Edit Details sheet (incl. author stored format & custom cover), Add to Collection, Add to Series, Download/Remove Download, Remove from Library.

@@ -5,8 +5,9 @@ import Persistence
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Library tab: the grid or list of books (P3.1), sorted (P3.2), Files import (P1.5), and pull to refresh (P2.8).
-/// Search, the collections view, and tapping a book arrive with the rest of Phase 3 (docs/UI_SPEC.md#library).
+/// Library tab: the grid or list of books (P3.1), sorted (P3.2) and searched (P3.3), Files import (P1.5), and
+/// pull to refresh (P2.8). The collections view and tapping a book arrive with the rest of Phase 3
+/// (docs/UI_SPEC.md#library).
 struct LibraryView: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(BookImportController.self) private var importController
@@ -19,11 +20,27 @@ struct LibraryView: View {
     /// Running downloads (0…1), from `DownloadManager`.
     @State private var downloadProgress: [Book.ID: Double] = [:]
     @State private var showingImporter = false
+    /// What's typed in the search field, and the same text once typing pauses, which is what the query uses.
+    @State private var searchText = ""
+    @State private var searchQuery = ""
+    /// Whether the whole library is empty, from the last unfiltered results; kept while a search is active.
+    @State private var libraryIsEmpty = true
 
     var body: some View {
         NavigationStack {
             Group {
-                if books.isEmpty {
+                if books.isEmpty, !searchQuery.isEmpty {
+                    // Not `ContentUnavailableView.search`: its description uses the system secondary colour,
+                    // which the accessibility audit flags for contrast.
+                    ScrollableUnavailableView {
+                        ContentUnavailableView(
+                            "No Results",
+                            systemImage: "magnifyingglass",
+                            description: Text("No books match “\(searchQuery)”. Check the spelling or try other words.")
+                                .foregroundStyle(.secondaryText)
+                        )
+                    }
+                } else if books.isEmpty {
                     ContentUnavailableView(
                         "No Books Yet",
                         systemImage: "books.vertical",
@@ -52,6 +69,11 @@ struct LibraryView: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) { SyncBanner() }
+            // Only with something to search: an empty library has nothing to find, and the bar leaves its empty
+            // state too little room at large Dynamic Type sizes. The default "Search" prompt, because a longer one
+            // is clipped at large sizes.
+            .modifier(LibrarySearch(text: $searchText, isEnabled: !libraryIsEmpty || !searchText.isEmpty))
+            .task(id: searchText) { await debounceSearch() }
             // On the content rather than the stack, so it doesn't share a view with the error alert.
             .alert(
                 "Already in Your Library",
@@ -99,9 +121,11 @@ struct LibraryView: View {
         // Restarts the observation whenever the sort changes.
         .task(id: query) {
             guard let environment else { return }
+            let query = query
             do {
                 for try await latest in environment.repositories.books.observeLibrary(query) {
                     books = latest
+                    if query.searchText.isEmpty { libraryIsEmpty = latest.isEmpty }
                 }
             } catch {
                 books = []
@@ -118,12 +142,55 @@ struct LibraryView: View {
 
 extension LibraryView {
     fileprivate var query: LibraryQuery {
-        LibraryQuery(sort: sort, reversed: sortReversed)
+        LibraryQuery(sort: sort, reversed: sortReversed, searchText: searchQuery)
+    }
+
+    /// Passes the typed text to the query once typing pauses for 150 ms; clearing the field applies at once.
+    /// Each keystroke restarts this task, which cancels the previous wait.
+    fileprivate func debounceSearch() async {
+        let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty {
+            do {
+                try await Task.sleep(for: .milliseconds(150))
+            } catch {
+                return
+            }
+        }
+        searchQuery = text
     }
 
     /// The picker's URLs are security-scoped; the importer opens and closes access around its copy.
     fileprivate func importPicked(_ result: Result<[URL], any Error>) {
         guard case .success(let urls) = result else { return }
         Task { await importController.importBooks(urls) }
+    }
+}
+
+/// `.searchable`, or nothing when there's nothing to search.
+private struct LibrarySearch: ViewModifier {
+    @Binding var text: String
+    let isEnabled: Bool
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            // The default placement: it may start collapsed, and pulling the library down shows it.
+            content.searchable(text: $text)
+        } else {
+            content
+        }
+    }
+}
+
+/// Shows an empty state centred as it is, or in a scroll view when larger Dynamic Type makes it taller than the
+/// space it has (the search bar leaves less room), so the text is never clipped. `ViewThatFits` rather than a
+/// `GeometryReader`-sized scroll view, whose height feeds back through the collapsing search bar.
+private struct ScrollableUnavailableView<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView { content }
+        }
     }
 }
