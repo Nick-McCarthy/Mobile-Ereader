@@ -39,16 +39,12 @@ struct LibraryView: View {
                         )
                     }
                 } else if books.isEmpty {
-                    ScrollableUnavailableView {
-                        ContentUnavailableView(
-                            "No Books Yet",
-                            systemImage: "books.vertical",
-                            description: Text(
-                                "Import an EPUB or connect iCloud Drive, Dropbox, or OneDrive in Settings."
-                            )
+                    ContentUnavailableView(
+                        "No Books Yet",
+                        systemImage: "books.vertical",
+                        description: Text("Import an EPUB or connect iCloud Drive, Dropbox, or OneDrive in Settings.")
                             .foregroundStyle(.secondaryText)
-                        )
-                    }
+                    )
                 } else {
                     switch viewMode {
                     case .grid:
@@ -71,8 +67,10 @@ struct LibraryView: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) { SyncBanner() }
-            // The default "Search" prompt: a longer one is clipped at large Dynamic Type sizes.
-            .searchable(text: $searchText)
+            // Only with something to search: an empty library has nothing to find, and the bar leaves its empty
+            // state too little room at large Dynamic Type sizes. The default "Search" prompt, because a longer one
+            // is clipped at large sizes.
+            .modifier(LibrarySearch(text: $searchText, isEnabled: !books.isEmpty || !searchText.isEmpty))
             .task(id: searchText) { await debounceSearch() }
             // On the content rather than the stack, so it doesn't share a view with the error alert.
             .alert(
@@ -161,6 +159,20 @@ extension LibraryView {
     fileprivate func importPicked(_ result: Result<[URL], any Error>) {
         guard case .success(let urls) = result else { return }
         Task { await importController.importBooks(urls) }
+    }
+}
+
+/// `.searchable`, or nothing when there's nothing to search.
+private struct LibrarySearch: ViewModifier {
+    @Binding var text: String
+    let isEnabled: Bool
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.searchable(text: $text)
+        } else {
+            content
+        }
     }
 }
 

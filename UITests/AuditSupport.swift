@@ -20,10 +20,15 @@ extension XCTestCase {
         }
     }
 
-    /// Issues in UIKit's own controls that the app can't change: the search field's clear button (×) is 20 pt,
-    /// under the audit's minimum hit area. Each exclusion is listed in docs/UI_SPEC.md#all-screens.
+    /// Issues in UIKit's own search field that the app can't change: its clear button (×) is 20 pt, under the
+    /// audit's minimum hit area, and its fixed-height text field is reported as clipping at large Dynamic Type
+    /// sizes. Each exclusion is listed in docs/UI_SPEC.md#all-screens.
     @MainActor
     private static func isKnownSystemIssue(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
-        issue.auditType == .hitRegion && issue.element?.label == "Clear text"
+        switch issue.auditType {
+        case .hitRegion: issue.element?.label == "Clear text"
+        case .textClipped: issue.element?.elementType == .searchField
+        default: false
+        }
     }
 }
