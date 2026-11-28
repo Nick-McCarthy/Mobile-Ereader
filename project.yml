@@ -57,6 +57,8 @@ targets:
         product: RemoteSources
       - package: EreaderKit
         product: BookStorage
+      - package: EreaderKit
+        product: LibraryServices
       - package: Readium
         product: ReadiumShared
       - package: Readium

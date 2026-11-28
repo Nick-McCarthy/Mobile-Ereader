@@ -1,15 +1,111 @@
+import BookStorage
+import Core
+import Persistence
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// Library tab: grid / list / collections views, sort, and search (action plan Phase 3).
+/// Library tab. For now a plain list with Files import (P1.5); the grid, list, and collections views,
+/// sort, and search arrive in Phase 3 (docs/UI_SPEC.md).
 struct LibraryView: View {
+    @Environment(\.appEnvironment) private var environment
+    @Environment(BookImportController.self) private var importController
+    @AppStorage("authorDisplayFormat") private var authorFormat = AuthorDisplayFormat.asStored
+    @State private var books: [Book] = []
+    @State private var showingImporter = false
+
     var body: some View {
         NavigationStack {
-            ContentUnavailableView(
-                "No Books Yet",
-                systemImage: "books.vertical",
-                description: Text("Import an EPUB or connect iCloud Drive, Dropbox, or OneDrive in Settings.")
-            )
+            Group {
+                if books.isEmpty {
+                    ContentUnavailableView(
+                        "No Books Yet",
+                        systemImage: "books.vertical",
+                        description: Text("Import an EPUB or connect iCloud Drive, Dropbox, or OneDrive in Settings.")
+                    )
+                } else {
+                    List(books) { book in
+                        BookRow(book: book, authorFormat: authorFormat, files: environment?.files)
+                    }
+                }
+            }
             .navigationTitle("Library")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    if importController.isImporting {
+                        ProgressView()
+                    } else {
+                        Button("Import Books", systemImage: "plus") { showingImporter = true }
+                    }
+                }
+            }
+            .fileImporter(
+                isPresented: $showingImporter,
+                allowedContentTypes: [.epub],
+                allowsMultipleSelection: true,
+                onCompletion: { result in importPicked(result) }
+            )
+            .alert(
+                "Import Failed",
+                isPresented: Binding(
+                    get: { importController.errorMessage != nil },
+                    set: { if !$0 { importController.errorMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(importController.errorMessage ?? "")
+            }
+        }
+        .task {
+            guard let environment else { return }
+            do {
+                for try await latest in environment.repositories.books.observeLibrary(LibraryQuery()) {
+                    books = latest
+                }
+            } catch {
+                books = []
+            }
+        }
+    }
+}
+
+extension LibraryView {
+    /// The picker's URLs are security-scoped; the importer opens and closes access around its copy.
+    fileprivate func importPicked(_ result: Result<[URL], any Error>) {
+        guard case .success(let urls) = result else { return }
+        Task { await importController.importBooks(urls) }
+    }
+}
+
+/// One book in the temporary list: cover thumbnail, title, and author in the chosen format.
+private struct BookRow: View {
+    let book: Book
+    let authorFormat: AuthorDisplayFormat
+    let files: BookFileStore?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            cover
+                .frame(width: 44, height: 66)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(book.title).font(.headline).lineLimit(2)
+                Text(AuthorNameFormatter.string(for: book.authorName, in: authorFormat))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private var cover: some View {
+        if let path = book.coverPath, let files,
+            let image = UIImage(contentsOfFile: files.url(forCoverPath: path).path(percentEncoded: false))
+        {
+            Image(uiImage: image).resizable().scaledToFill()
+        } else {
+            Rectangle().fill(.quaternary).overlay(Image(systemName: "book.closed").foregroundStyle(.secondary))
         }
     }
 }

@@ -51,14 +51,15 @@ Mobile-Ereader/
 │  ├─ Persistence/               # GRDB database, migrations, repositories
 │  ├─ EPUBMetadata/              # OPF parsing, cover extraction, RemoteZipReader
 │  ├─ RemoteSources/             # RemoteSource protocol, OAuth/PKCE + Keychain, iCloud/Dropbox/OneDrive adapters, SyncEngine
-│  └─ BookStorage/               # On-device file management, downloads, file protection
+│  ├─ BookStorage/               # On-device file management (BookFileStore), downloads
+│  └─ LibraryServices/           # Cross-module workflows: LocalBookImporter (Files / "Open in…"), later sync ingest
 ├─ UITests/                      # XCUITest target (also produces CI screenshots)
 ├─ docs/                         # agent helper files (see /Agents.md)
 ├─ .github/workflows/            # ci.yml, release.yml (see CI_AND_BUILD.md)
 └─ project.yml                   # XcodeGen spec (source of truth for the Xcode project)
 ```
 
-Dependency direction (no cycles): `App → {RemoteSources, BookStorage, Persistence, EPUBMetadata} → Core`. Readium is imported only by `App/Features/Reader` and (optionally) `EPUBMetadata` for local files.
+Dependency direction (no cycles): `App → LibraryServices → {RemoteSources, BookStorage, Persistence, EPUBMetadata} → Core`. `FileProtection` (the Data Protection helper) lives in Core so Persistence and BookStorage share it. Readium is imported only by `App/Features/Reader` and (optionally) `EPUBMetadata` for local files.
 
 ## Runtime architecture
 
@@ -73,7 +74,11 @@ Dependency direction (no cycles): `App → {RemoteSources, BookStorage, Persiste
 |---|---|---|---|
 | `Application Support/Database/library.sqlite` | All metadata | `completeUntilFirstUserAuthentication` (sync can run in background) | Yes |
 | `Application Support/Books/remote/<bookId>.epub` | Downloaded books from iCloud / Dropbox / OneDrive | `completeUntilFirstUserAuthentication` | **No** (`isExcludedFromBackup`; re-downloadable). **Yes** once *detached* (source unlinked) |
-| `Application Support/Books/local/<uuid>.epub` | Books imported from Files / share sheet | `completeUntilFirstUserAuthentication` | Yes (only copy) |
+| `Application Support/Books/local/<bookId>.epub` | Books imported from Files / share sheet | `completeUntilFirstUserAuthentication` | Yes (only copy) |
 | `Caches/Covers/<bookId>.jpg` | Cover thumbnails | default | No (regenerable from source) |
+
+The database stores book and cover paths **relative** to these roots (`Books/local/<bookId>.epub`, `<bookId>.jpg`) because the container's absolute path changes between installs; `BookFileStore` resolves them.
+
+**Local import (P1.5):** the Library's + button (`.fileImporter`, `UTType.epub`) and "Open in…" (`CFBundleDocumentTypes` for `org.idpf.epub-container`, `LSSupportsOpeningDocumentsInPlace = NO`) both call `LocalBookImporter`. It copies the file (file-coordinated, inside the security scope) to `Books/local/`, parses the copy, saves the cover thumbnail, and inserts a downloaded `local` book. Files that aren't EPUBs are refused; damaged ones import with placeholders. Any failure removes the copied file and cover. "Open in…" files the system placed in `Documents/Inbox` are deleted after import. UI tests (`-UITestMode`) use an in-memory database and temporary folders.
 
 Never store books in `Documents/` unless we deliberately enable Files-app visibility (`UIFileSharingEnabled`) — out of scope for v1.

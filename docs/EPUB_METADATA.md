@@ -27,11 +27,21 @@ Typical cost: 3–5 small requests per book instead of the full file. **Fallback
 
 Local files (imports, already-downloaded books, and iCloud/Files items) are parsed with `ReadiumZIPFoundation` (file data source) or Readium's `Publication` API.
 
+## Implementation (`EPUBMetadata` module)
+- `EPUBMetadataReader.read(fileAt:limits:)` returns `EPUBMetadata`: optional title, `[EPUBAuthor]` (name + file-as), `publicationDate` (normalised ISO: `1998`, `1998-07`, or `1998-07-14`) and `publicationDateSort` (`yyyymmdd`, missing parts as `00`), series name and position, language, publisher, description, identifier (the package's `unique-identifier` preferred), and the cover's archive path plus a JPEG thumbnail.
+- Missing fields are nil. `Book.init` (Persistence) applies the placeholders, so the parser never stores placeholder text.
+- Creators count as authors when their role is `aut` or they have no role at all; other roles (`edt`, `ill`, …) are dropped.
+- Calibre's `0101-01-01` "unknown date" sentinel is treated as no date.
+- Cover candidates are tried in the priority order above. A candidate that is missing, over the limits, or not decodable is skipped and the next one is tried. The thumbnail is made with ImageIO (decodes at the reduced size); saving it to `Caches/Covers/<bookId>.jpg` is the caller's job (P1.5 / sync).
+- Entry lookups fall back to a case-insensitive match, because some books' links don't match the archive's capitalisation.
+- Failures throw `EPUBMetadataError` (`unreadableArchive`, `tooManyEntries`, `missingEntry`, `entryTooLarge`, `malformedXML`, `missingPackageDocument`). A missing cover is not an error.
+- Tests build synthetic EPUBs in code (`Tests/EPUBMetadataTests/EPUBFixture.swift`), so no real books are committed.
+
 ## Security of untrusted archives
 EPUBs are untrusted input.
-- Never extract the archive to disk with entry paths as file names (zip-slip). Read entries in-memory or via Readium.
-- Cap: total uncompressed bytes read for metadata (e.g. 20 MB), entry count (e.g. 10 000), XML depth, and compression ratio (zip-bomb guard).
-- Use `XMLParser` with `shouldResolveExternalEntities = false`.
+- Never extract the archive to disk with entry paths as file names (zip-slip). Read entries in-memory or via Readium. The parser only reads entries into memory, and links that resolve outside the archive root (`..` past the root, absolute paths, URLs) are ignored.
+- Caps (`EPUBLimits`, defaults): 10,000 entries; 10 MB per entry read; 20 MB total read per book; entries over 1 MB may not inflate more than 100× their compressed size (zip-bomb guard); XML depth 64; cover images over 50 megapixels are skipped. Declared sizes are checked first and the real inflated output is counted too, since headers can lie.
+- Use `XMLParser` with `shouldResolveExternalEntities = false`. Documents that declare entities (`<!ENTITY`) are rejected outright, which also blocks entity-expansion ("billion laughs") attacks.
 - A malformed book must never crash sync — record it with placeholders and a `parseError` note.
 
 ## Author name normalisation
@@ -45,4 +55,13 @@ Concept requirement: books store authors as either `"Last, First"` or `"First La
 
 **Components:** parse into `given` / `family` (+ optional particles like "van", "de", "le" kept with family, suffixes kept separately). Unit-test a fixture table of tricky names: `"Le Guin, Ursula K."`, `"Ursula K. Le Guin"`, `"Tolkien, J. R. R."`, `"Martin Luther King, Jr."`, `"Homer"`, `"Gabriel García Márquez"`, `"Bob Smith & Jane Doe"`.
 
-**Global setting** (Settings → Library → *Author name format*): `As stored` · `First Last` · `Last, First`. `AuthorNameFormatter` (in `Core`) renders from components; it is a pure function and used everywhere an author is shown. Author sort always uses family name regardless of display setting. The raw value is never mutated, so the setting is fully reversible.
+**Implementation** (`Core/AuthorName.swift`):
+- `AuthorName(raw:fileAs:)` detects the format; `AuthorName(raw:storedFormat:fileAs:)` parses with a format the user chose. `people` holds one `PersonName` (`given`, `family`, `suffix`) per author; `primary` is the first.
+- Several authors are split on `&` or `;` and parsed one by one. A part with no comma is read as "First Last" even when the book's format is `lastFirst`.
+- `lastFirst` also accepts a trailing suffix: `"King, Martin Luther, Jr."`. More commas than that → `unknown`.
+- Particles (`van`, `von`, `de`, `da`, `di`, `du`, `del`, `della`, `der`, `den`, `des`, `la`, `le`, `ter`, `ten`, `dos`, `das`, `St.`) before the last word join the family name, but at least one given name is kept ("Van Morrison" → family "Morrison").
+- Organisation words (`Press`, `Publishing`, `Books`, `Inc`, `Ltd`, `Society`, `University`, `Gutenberg`, …) → `unknown`.
+- Without file-as, a double surname can't be detected: "Gabriel García Márquez" gives family "Márquez". A file-as of `"García Márquez, Gabriel"` fixes it.
+- `Book.init` / `Book.setAuthor(raw:fileAs:storedFormat:)` (Persistence) run detection and store the primary person's `authorGiven` / `authorFamily` for sorting. Suffixes aren't stored; `book.authorName` re-parses the raw value for display.
+
+**Global setting** (Settings → Library → *Author name format*): `As stored` · `First Last` · `Last, First`. `AuthorDisplayFormat` (`asStored`, `firstLast`, `lastFirst`; stored in UserDefaults by raw value). `AuthorNameFormatter.string(for:in:)` (in `Core`) renders from components, joining several authors with " & ", and shows `unknown` values verbatim; it is a pure function and used everywhere an author is shown. Author sort always uses family name regardless of display setting. The raw value is never mutated, so the setting is fully reversible.

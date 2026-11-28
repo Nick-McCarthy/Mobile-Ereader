@@ -1,0 +1,85 @@
+import Foundation
+import ReadiumZIPFoundation
+
+/// Read-only access to an EPUB's entries, enforcing `EPUBLimits`. Entries are read into memory, never extracted.
+actor EPUBArchive {
+    private static let ratioCheckThreshold: UInt64 = 1024 * 1024
+
+    private let archive: Archive
+    private let entries: [String: Entry]
+    /// Lower-cased paths, for books whose links don't match the archive's capitalisation.
+    private let caseInsensitiveEntries: [String: Entry]
+    private let limits: EPUBLimits
+    private var bytesRead = 0
+
+    init(fileURL: URL, limits: EPUBLimits) async throws {
+        let archive: Archive
+        let entries: [Entry]
+        do {
+            archive = try await Archive(url: fileURL, accessMode: .read)
+            entries = try await archive.entries()
+        } catch {
+            throw EPUBMetadataError.unreadableArchive
+        }
+        guard entries.count <= limits.maxEntryCount else { throw EPUBMetadataError.tooManyEntries }
+        self.archive = archive
+        self.limits = limits
+        self.entries = Dictionary(entries.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+        self.caseInsensitiveEntries = Dictionary(
+            entries.map { ($0.path.lowercased(), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    func contains(_ path: String) -> Bool {
+        entry(at: path) != nil
+    }
+
+    /// The entry's uncompressed bytes. Throws if it is missing or breaks a limit.
+    func data(at path: String) async throws -> Data {
+        guard let entry = entry(at: path), entry.type == .file else { throw EPUBMetadataError.missingEntry(path) }
+        let allowed = max(min(limits.maxEntryBytes, limits.maxTotalBytes - bytesRead), 0)
+        let declared = entry.uncompressedSize
+        guard declared <= UInt64(allowed) else { throw EPUBMetadataError.entryTooLarge(path) }
+        if declared > Self.ratioCheckThreshold {
+            let compressed = max(entry.compressedSize, 1)
+            guard declared / compressed <= UInt64(limits.maxCompressionRatio) else {
+                throw EPUBMetadataError.entryTooLarge(path)
+            }
+        }
+
+        // Declared sizes can lie, so the collector also stops once the real output passes the limit.
+        let collector = ByteCollector(limit: allowed)
+        do {
+            _ = try await archive.extract(entry) { chunk in try await collector.append(chunk) }
+        } catch is ByteCollector.LimitExceeded {
+            throw EPUBMetadataError.entryTooLarge(path)
+        } catch {
+            throw EPUBMetadataError.unreadableArchive
+        }
+        let data = await collector.data
+        bytesRead += data.count
+        return data
+    }
+
+    private func entry(at path: String) -> Entry? {
+        entries[path] ?? caseInsensitiveEntries[path.lowercased()]
+    }
+}
+
+/// Accumulates extracted chunks, refusing to grow past `limit`.
+private actor ByteCollector {
+    struct LimitExceeded: Error {}
+
+    private(set) var data = Data()
+    private let limit: Int
+
+    init(limit: Int) {
+        self.limit = limit
+    }
+
+    func append(_ chunk: Data) throws {
+        guard data.count + chunk.count <= limit else { throw LimitExceeded() }
+        data.append(chunk)
+    }
+}
