@@ -149,7 +149,7 @@ public actor DownloadManager {
         do {
             partial = try job.files.partialDownloadURL(bookId: bookId)
         } catch {
-            try? await job.books.updateBook(id: bookId) { $0.downloadState = .failed }
+            _ = try? await job.books.updateBook(id: bookId) { $0.downloadState = .failed }
             throw error
         }
         do {
@@ -183,7 +183,7 @@ public actor DownloadManager {
             let cancelled = error is CancellationError || Task.isCancelled
             // A cancelled update of a stale copy keeps that copy; it's still readable.
             let state: DownloadState = cancelled ? previousState : .failed
-            try? await job.books.updateBook(id: bookId) { book in
+            _ = try? await job.books.updateBook(id: bookId) { book in
                 book.downloadState = book.localFilePath == nil ? state : .downloaded
             }
             if cancelled { throw CancellationError() }
