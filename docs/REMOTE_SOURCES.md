@@ -130,6 +130,19 @@ Triggered by **Sync Now** in Settings (and pull-to-refresh in the library; `BGAp
 4. Save the new cursor only after the whole listing has been processed, so a crash re-runs the listing (sync is idempotent).
 5. Report progress (`source · found N · processed M · errors E`) via `AsyncStream<SyncProgress>` to Settings and the library banner. Support cancellation.
 
+#### As implemented (P2.7, `LibraryServices/SyncEngine.swift`)
+- `SyncEngine.sync(_ targets: [SyncTarget], progress:)` returns a `SyncOutcome` per source: `.synced`, `.incomplete(failedBooks:)`, `.needsRelink`, `.failed(message:)`, or `.cancelled`. `run(_:)` wraps it as an `AsyncStream<SyncProgress>`; ending the stream cancels the sync. A second sync while one runs throws `SyncEngineError.alreadySyncing`.
+- A `SyncTarget` is a `LibrarySource` plus its `RemoteSource`. The engine re-reads the source row first (the caller's copy may hold an old cursor) and skips a source that has been unlinked.
+- The whole listing is collected before anything is written (`Listing.collect`). A listing that fails or ends without `.cursor` changes nothing.
+- The diff is applied in one transaction (`BookRepository.applyListing`): new books are inserted with placeholders, books seen again get their path, size and modified date and stop being missing, and books not seen (full listings) or `.removed` are flagged `isMissingFromSource`.
+- Metadata is read for new books and books whose `version` differs from `remoteVersion`: ranged reads where `byteRangeReader` exists (falling back to a full download), otherwise a temporary full copy. Up to 4 at once (2 for iCloud). Each book is saved with `BookRepository.updateBook`, which reads and writes in one transaction so an edit made meanwhile isn't lost.
+- Saving metadata keeps `userEditedFields`, reading state, the download and memberships. A new version without a cover keeps the old cover. The EPUB's series is saved unless the user already put the book in one (P4.5).
+- **Idempotent resume:** `remoteVersion` is set only after a book's metadata is saved. A book that failed (network error, still rate-limited after retries, `notFound`) keeps its old version, the sync ends `.incomplete`, and the cursor isn't saved, so the next sync lists it again and reads only what's left.
+- A file that isn't a readable EPUB (`EPUBMetadataError`) keeps its placeholders (or its previous metadata) and gets the new `remoteVersion`, so it isn't read again until it changes. It's counted as `unreadable`, not as an error.
+- `RetryPolicy` (4 attempts, 1 s doubling to at most 60 s, jitter 0.5–1) retries `rateLimited` for both listing and metadata. A `Retry-After` is honoured; one longer than the maximum delay isn't waited for.
+- `needsRelink` stops that source and records `needsRelink`. Other failures record `error` with a short message (`SyncMessages`) that never contains paths, names or provider responses. Cancelling leaves the source's status and cursor as they were.
+- Not yet: re-attaching detached books on re-link (P2.10), and background sync (`BGAppRefreshTask`, later).
+
 ### Robustness
 - Exponential backoff with jitter on `429` / `503` / provider rate-limit errors. Honour `Retry-After`.
 - On `401`: refresh once, retry once, then mark the source *needs re-link* and show a prompt.

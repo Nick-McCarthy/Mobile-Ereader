@@ -47,8 +47,9 @@ The user can link any combination of the three. Spec: [`REMOTE_SOURCES.md`](REMO
 - [ ] **P2.5 Dropbox adapter** ∥ — app key config + URL scheme, sign-in, folder browser, recursive `list_folder` with saved cursor (incl. `reset`), ranged and full download.
 - [ ] **P2.6 OneDrive adapter** ∥ — Entra client id config + redirect, sign-in, folder browser, BFS `children` walk (+ `delta` on personal accounts), ranged and full download via pre-authenticated URL.
   *Done when (P2.4–P2.6):* each adapter passes tests against sanitised recorded responses (or a temp directory for iCloud), including pagination, deletions, and auth expiry.
-- [ ] **P2.7 Sync engine** — provider-agnostic: diff (new / changed / missing), bounded-concurrency metadata fetch, respects `userEditedFields`, saves cursor only on success, progress stream, cancellation, idempotent resume, multiple sources.
+- [x] **P2.7 Sync engine** — provider-agnostic: diff (new / changed / missing), bounded-concurrency metadata fetch, respects `userEditedFields`, saves cursor only on success, progress stream, cancellation, idempotent resume, multiple sources.
   *Done when:* fake-source tests cover nested folders, pagination, cursor resume, deletions, version changes, rate-limit retry, and two sources linked at once.
+  *Status:* done in `LibraryServices/SyncEngine.swift` (`SyncEngineTests`). Adds `book.localFileVersion` (migration v2) so a changed downloaded book reports `isDownloadStale`. Details in [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#as-implemented-p27-libraryservicessyncengineswift).
 - [ ] **P2.8 Sources UI** — Settings *Book Sources* section (link / change folder / unlink per service, with the outcome-stating unlink confirmation), in-app folder browser for Dropbox and OneDrive, *Sync Now* with per-source progress, library banner, re-link prompts.
 - [ ] **P2.9 On-demand download** — `DownloadManager` actor; tap-to-download with progress, cancel, atomic move, backup exclusion; *Remove Download*.
 - [ ] **P2.10 Unlink & detached books** — per [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#unlinking--detached-books): remote files untouched; not-downloaded books deleted; downloaded books detached (backup flag cleared); deleting a detached book's file deletes the book; launch-time integrity pass; re-attach on re-link.
@@ -74,9 +75,9 @@ From [`audit-stage-1-findings.md`](audit-stage-1-findings.md). High before P2.5;
 - [x] **A1.8 Library view hygiene** (F-E1, F-E2, F-E4, F-E5) — async, cached cover loading off the main actor; per-import state in `BookImportController`; a stored `@Bindable`-friendly alert flag instead of `Binding(get:set:)`; show an error state when the library can't be read. F-E1 is done (`CoverImageCache`); the Low items F-E2, F-E4, and F-E5 move to Phase 3 with the Library rework.
 - [x] **A1.9 Accessibility automation** (F-F1, F-F2) — add a UI test running `performAccessibilityAudit()` on the Library (empty and with a seeded book in `-UITestMode`); hide the decorative cover from VoiceOver; label the import progress indicator.
   *Done when:* the audit test passes in CI.
-- [ ] **A1.10 Privacy-manifest coverage** (F-G1, F-G2) — list the required-reason APIs used by our sources and the Readium modules we link at the pinned version, add any missing declarations (System Boot Time if confirmed), and extend `check-compliance.sh` to grep our sources for required-reason APIs and fail when the manifest lacks the category; prove each compliance check fails on a deliberately broken branch. Re-check on every Readium bump.
+- [x] **A1.10 Privacy-manifest coverage** (F-G1, F-G2) — list the required-reason APIs used by our sources and the Readium modules we link at the pinned version, add any missing declarations (System Boot Time if confirmed), and extend `check-compliance.sh` to grep our sources for required-reason APIs and fail when the manifest lacks the category; prove each compliance check fails on a deliberately broken branch. Re-check on every Readium bump.
   *Done when:* CI fails on a branch that adds an undeclared `UserDefaults` or `systemUptime` use.
-  *Status:* the check and the Readium review are in. Not yet proven in CI: the check was only run locally against a copy of the sources with an added `systemUptime` (it failed as expected). `UserDefaults` is already declared, so only an undeclared category can fail it. Tick once a throwaway branch shows the CI failure.
+  *Status:* done. A throwaway branch that added `ProcessInfo.processInfo.systemUptime` failed the "Compliance checks (source)" step in CI run 46086173090 ("sources use a SystemBootTime API … doesn't declare it"); the branch was then deleted. `UserDefaults` is already declared, so only an undeclared category can fail the check.
 
 ## Phase 3 — Library UI
 
@@ -95,7 +96,8 @@ From [`audit-stage-1-findings.md`](audit-stage-1-findings.md). High before P2.5;
 - [ ] **P4.2 Create collection / series from Settings** + manage lists.
 - [ ] **P4.3 Author name format setting** with live preview; applies app-wide immediately.
 - [ ] **P4.4 Storage & privacy settings** — downloads size, Remove All Downloads, Delete All App Data, licences, privacy policy link.
-- [ ] **P4.5 Series auto-population** from `calibre:series` / EPUB 3 collection metadata during sync (non-destructive to user assignments).
+- [x] **P4.5 Series auto-population** from `calibre:series` / EPUB 3 collection metadata during sync (non-destructive to user assignments).
+  *Status:* done with P2.7: sync (like local import) saves the EPUB's series unless the user already put the book in a series.
 
 ## Phase 5 — Reader
 

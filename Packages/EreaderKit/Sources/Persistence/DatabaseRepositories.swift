@@ -56,6 +56,44 @@ public struct DatabaseBookRepository: BookRepository {
         }
     }
 
+    public func books(inSource sourceId: LibrarySource.ID) async throws -> [Book] {
+        try await database.writer.read { db in
+            try Book.fetchAll(db, sql: "SELECT * FROM book WHERE sourceId = ?", arguments: [sourceId])
+        }
+    }
+
+    public func applyListing(_ changes: BookListingChanges) async throws {
+        guard !changes.isEmpty else { return }
+        try await database.writer.write { db in
+            for book in changes.inserted {
+                try book.insert(db)
+            }
+            for book in changes.relisted {
+                try db.execute(
+                    sql: """
+                        UPDATE book SET remotePath = ?, fileSize = ?, remoteModifiedAt = ?, isMissingFromSource = 0
+                        WHERE id = ?
+                        """,
+                    arguments: [book.remotePath, book.fileSize, book.remoteModifiedAt, book.id]
+                )
+            }
+            for id in changes.missing {
+                try db.execute(sql: "UPDATE book SET isMissingFromSource = 1 WHERE id = ?", arguments: [id])
+            }
+        }
+    }
+
+    @discardableResult
+    public func updateBook(id: Book.ID, _ change: @escaping @Sendable (inout Book) -> Void) async throws -> Book? {
+        try await database.writer.write { db in
+            guard var book = try Book.fetchOne(db, key: id) else { return nil }
+            change(&book)
+            book.id = id
+            try book.update(db)
+            return book
+        }
+    }
+
     static func library(_ db: Database, _ query: LibraryQuery) throws -> [Book] {
         let order = orderClause(query.sort, reversed: query.reversed)
         let searchText = query.searchText.trimmingCharacters(in: .whitespacesAndNewlines)

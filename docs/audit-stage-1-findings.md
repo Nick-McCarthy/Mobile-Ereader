@@ -35,7 +35,7 @@ The audit changed no code, so no new CI run was needed. Each fix task must inclu
 
 Ordered by severity. "Rule" cites the skill reference or project doc each finding is judged against.
 
-**Fix status (2026-11-27):** High and Medium findings are fixed on `feature/a1-audit-fixes` (tasks A1.1–A1.10, CI green). A1.10's CI-failure proof is still open, and the Low findings outside those tasks (F-E2, F-E4, F-E5) move to Phase 3.
+**Fix status (2026-11-27):** High and Medium findings are fixed (tasks A1.1–A1.10, merged to `main` in PR Nick-McCarthy/Mobile-Ereader#5). A1.10's check was shown failing in CI on a throwaway branch (run 46086173090). The Low findings outside those tasks (F-E2, F-E4, F-E5) move to Phase 3.
 
 | Id | Area | Severity | File:line | Finding | Evidence | Rule | Action |
 |---|---|---|---|---|---|---|---|
