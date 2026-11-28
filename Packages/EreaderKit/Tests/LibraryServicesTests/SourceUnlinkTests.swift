@@ -41,9 +41,9 @@ struct SourceUnlinkTests {
         FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
     }
 
-    private func isExcludedFromBackup(_ book: Book) throws -> Bool? {
-        let url = files.url(forBookPath: try #require(book.localFilePath))
-        return try url.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup
+    /// The book file's backup flag, once it reads as `expected` (see `backupExclusion(of:settlingOn:)`).
+    private func isExcludedFromBackup(_ book: Book, settlingOn expected: Bool) async throws -> Bool? {
+        try await backupExclusion(of: files.url(forBookPath: try #require(book.localFilePath)), settlingOn: expected)
     }
 
     private func engine() -> SyncEngine {
@@ -125,7 +125,7 @@ struct SourceUnlinkTests {
         #expect(detached.sourceKind == .dropbox)
         #expect(detached.remoteId == "/Local.epub")
         #expect(exists(files.url(forBookPath: try #require(detached.localFilePath))))
-        #expect(try isExcludedFromBackup(detached) == false)
+        #expect(try await isExcludedFromBackup(detached, settlingOn: false) == false)
         #expect(try await titles(matching: "device") == ["On Device"])
         #expect(try await repositories.sources.source(id: source.id) == nil)
         #expect(await !remote.isLinked)
@@ -192,6 +192,24 @@ struct SourceUnlinkTests {
         #expect(try await repositories.books.book(id: cloud.id) != nil)
     }
 
+    @Test("The launch check puts a kept detached book back into backups if unlinking missed it")
+    func integrityRestoresBackup() async throws {
+        defer { cleanUp() }
+        let remote = FakeRemoteSource(kind: .dropbox)
+        await remote.putFile("/Book.epub", data: try await EPUBBytes.make(title: "Book"))
+        let source = try await linkAndSync(remote)
+        let downloaded = try await downloads.download(try await book(at: "/Book.epub", in: source).id, from: remote)
+        try await unlinker.unlink(sourceId: source.id, remote: remote)
+        // As if clearing the flag had failed during the unlink.
+        try files.setExcludedFromBackup(true, bookPath: try #require(downloaded.localFilePath))
+        #expect(try await isExcludedFromBackup(downloaded, settlingOn: true) == true)
+
+        #expect(try await check.run() == 0)
+
+        #expect(try await repositories.books.book(id: downloaded.id)?.isDetached == true)
+        #expect(try await isExcludedFromBackup(downloaded, settlingOn: false) == false)
+    }
+
     // MARK: Re-linking
 
     @Test("Re-linking the service re-attaches detached books, keeping their data, without duplicates")
@@ -214,7 +232,7 @@ struct SourceUnlinkTests {
         #expect(reattached.id == read.id)
         #expect(reattached.downloadState == .downloaded)
         #expect(!reattached.isDownloadStale)
-        #expect(try isExcludedFromBackup(reattached) == true)
+        #expect(try await isExcludedFromBackup(reattached, settlingOn: true) == true)
         var bookmarks = repositories.bookmarks.observeBookmarks(forBook: read.id).makeAsyncIterator()
         #expect(try await bookmarks.next()?.count == 1)
         #expect(try await repositories.books.fetchLibrary(LibraryQuery()).count == 2)

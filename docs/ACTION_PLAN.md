@@ -81,6 +81,10 @@ From [`audit-stage-1-findings.md`](audit-stage-1-findings.md). High before P2.5;
 - [x] **A1.10 Privacy-manifest coverage** (F-G1, F-G2) — list the required-reason APIs used by our sources and the Readium modules we link at the pinned version, add any missing declarations (System Boot Time if confirmed), and extend `check-compliance.sh` to grep our sources for required-reason APIs and fail when the manifest lacks the category; prove each compliance check fails on a deliberately broken branch. Re-check on every Readium bump.
   *Done when:* CI fails on a branch that adds an undeclared `UserDefaults` or `systemUptime` use.
   *Status:* done. A throwaway branch that added `ProcessInfo.processInfo.systemUptime` failed the "Compliance checks (source)" step in CI run 46086173090 ("sources use a SystemBootTime API … doesn't declare it"); the branch was then deleted. `UserDefaults` is already declared, so only an undeclared category can fail the check.
+- [x] **A1.11 Flaky detached-book backup assertion** (P2.10) — `SourceUnlinkTests` failed once at "detached file is included in backups" (CI run 46133247252), then passed on re-run.
+  *Cause:* on macOS, where `swift test` runs, `isExcludedFromBackup` settles after a delay. Diagnostic CI runs (46138912255, 46139081624, 46139268490) repeated the unlink hundreds of times. The clear never threw and read back `false` straight away, yet a later read sometimes returned `true` for up to about 0.45 s before settling on `false` for good. `SourceUnlinker` was correct; the test read too early.
+  *Fix:* tests read the flag through `backupExclusion(of:settlingOn:)`, which waits up to 5 s for the expected value and still fails if it never arrives. `DetachedBookCheck.run` now also puts every kept detached file back into backups at each launch, so a clear missed during an unlink is repaired.
+  *Done when:* CI is green with the new launch-repair test.
 
 ## Phase 3 — Library UI
 
