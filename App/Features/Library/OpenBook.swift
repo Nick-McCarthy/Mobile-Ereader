@@ -68,7 +68,8 @@ struct ReaderPlaceholderView: View {
             )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    // An icon: text in the navigation bar doesn't grow with Dynamic Type, which the audit flags.
+                    Button("Close", systemImage: "xmark") { dismiss() }
                 }
             }
         }
