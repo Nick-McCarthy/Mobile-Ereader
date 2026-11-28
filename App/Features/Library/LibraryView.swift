@@ -23,6 +23,8 @@ struct LibraryView: View {
     /// What's typed in the search field, and the same text once typing pauses, which is what the query uses.
     @State private var searchText = ""
     @State private var searchQuery = ""
+    /// Whether the whole library is empty, from the last unfiltered results; kept while a search is active.
+    @State private var libraryIsEmpty = true
 
     var body: some View {
         NavigationStack {
@@ -70,7 +72,7 @@ struct LibraryView: View {
             // Only with something to search: an empty library has nothing to find, and the bar leaves its empty
             // state too little room at large Dynamic Type sizes. The default "Search" prompt, because a longer one
             // is clipped at large sizes.
-            .modifier(LibrarySearch(text: $searchText, isEnabled: !books.isEmpty || !searchText.isEmpty))
+            .modifier(LibrarySearch(text: $searchText, isEnabled: !libraryIsEmpty || !searchText.isEmpty))
             .task(id: searchText) { await debounceSearch() }
             // On the content rather than the stack, so it doesn't share a view with the error alert.
             .alert(
@@ -119,9 +121,11 @@ struct LibraryView: View {
         // Restarts the observation whenever the sort changes.
         .task(id: query) {
             guard let environment else { return }
+            let query = query
             do {
                 for try await latest in environment.repositories.books.observeLibrary(query) {
                     books = latest
+                    if query.searchText.isEmpty { libraryIsEmpty = latest.isEmpty }
                 }
             } catch {
                 books = []
