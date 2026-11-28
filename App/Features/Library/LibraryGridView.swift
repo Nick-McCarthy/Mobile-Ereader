@@ -42,12 +42,17 @@ private struct LibraryGridCell: View {
             BookCover(book: book, authorFormat: authorFormat, files: files)
                 .overlay(alignment: .topTrailing) { BookFileStatusBadge(status: status) }
                 .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
-            Text(book.title)
-                .font(.subheadline.weight(.medium))
-            Text(AuthorNameFormatter.string(for: book.authorName, in: authorFormat))
-                .font(.caption)
-                .foregroundStyle(.secondaryText)
+            // Full height, so a grid row never squeezes the text when the type grows.
+            Group {
+                Text(book.title)
+                    .font(.subheadline.weight(.medium))
+                Text(AuthorNameFormatter.string(for: book.authorName, in: authorFormat))
+                    .font(.caption)
+                    .foregroundStyle(.secondaryText)
+            }
+            .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibility.label)
         .accessibilityValue(accessibility.value)
