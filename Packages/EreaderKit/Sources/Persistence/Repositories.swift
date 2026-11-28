@@ -126,6 +126,8 @@ public protocol CollectionRepository: Sendable {
     /// Collections in the user's order.
     func observeCollections() -> AsyncThrowingStream<[BookCollection], any Error>
     func observeBooks(inCollection id: BookCollection.ID) -> AsyncThrowingStream<[Book], any Error>
+    /// Every collection in the user's order with the ids of its books, for the library's collections view (P3.4).
+    func observeMemberships() -> AsyncThrowingStream<CollectionMemberships, any Error>
     func collections(containing bookId: Book.ID) async throws -> [BookCollection]
     /// Creates a collection at the end of the list. Throws `RepositoryError` for empty or duplicate names.
     func createCollection(named name: String) async throws -> BookCollection

@@ -190,6 +190,20 @@ public struct DatabaseCollectionRepository: CollectionRepository {
         }
     }
 
+    public func observeMemberships() -> AsyncThrowingStream<CollectionMemberships, any Error> {
+        database.observe { db in
+            let collections = try BookCollection.fetchAll(db, sql: "SELECT * FROM collection ORDER BY sortOrder, name")
+            var bookIds: [BookCollection.ID: Set<Book.ID>] = [:]
+            let rows = try Row.fetchAll(db, sql: "SELECT collectionId, bookId FROM collection_book")
+            for row in rows {
+                let collectionId: String = row["collectionId"]
+                let bookId: String = row["bookId"]
+                bookIds[collectionId, default: []].insert(bookId)
+            }
+            return CollectionMemberships(collections: collections, bookIds: bookIds)
+        }
+    }
+
     public func collections(containing bookId: Book.ID) async throws -> [BookCollection] {
         try await database.writer.read { db in
             try BookCollection.fetchAll(

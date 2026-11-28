@@ -11,7 +11,8 @@ struct AppEnvironment: Sendable {
     let importer: LocalBookImporter
     /// Removes Keychain tokens left by an earlier install. Nil in UI tests, which never touch the Keychain.
     let tokenCleanup: OrphanedTokenCleanup?
-    /// UI tests only (`-UITestSeedBooks`): books in each download state, so audits see a non-empty library.
+    /// UI tests only (`-UITestSeedBooks`): books in each download state, and two collections, so audits see a
+    /// non-empty library.
     let uiTestSeedBooks: [Book]
     /// Removes detached books whose file is gone (docs/REMOTE_SOURCES.md#unlinking--detached-books).
     let detachedBookCheck: DetachedBookCheck
@@ -57,6 +58,18 @@ struct AppEnvironment: Sendable {
         _ = try? await tokenCleanup?.run()
         _ = try? await detachedBookCheck.run()
         for book in uiTestSeedBooks { try? await repositories.books.save(book) }
+        if !uiTestSeedBooks.isEmpty { await seedUITestCollections() }
+    }
+
+    /// "Le Guin" holds both Le Guin books and "Favourites" one of them; the other two books are in none.
+    private func seedUITestCollections() async {
+        let collections = repositories.collections
+        guard let leGuin = try? await collections.createCollection(named: "Le Guin"),
+            let favourites = try? await collections.createCollection(named: "Favourites")
+        else { return }
+        try? await collections.addBook("uitest-book", toCollection: leGuin.id)
+        try? await collections.addBook("uitest-failed", toCollection: leGuin.id)
+        try? await collections.addBook("uitest-book", toCollection: favourites.id)
     }
 
     /// A downloaded book part-read, a placeholder book not downloaded, one whose download failed, and one missing
@@ -99,7 +112,13 @@ struct AppEnvironment: Sendable {
             )
             let seed = arguments.contains("-UITestSeedBooks") ? uiTestBooks : []
             // Each run starts in the default view mode and sort, whatever an earlier test chose.
-            for key in [LibraryViewMode.storageKey, LibrarySortMenu.sortKey, LibrarySortMenu.reversedKey] {
+            let keys = [
+                LibraryViewMode.storageKey,
+                LibrarySortMenu.sortKey,
+                LibrarySortMenu.reversedKey,
+                StoredIDSet.libraryCollapsedKey,
+            ]
+            for key in keys {
                 UserDefaults.standard.removeObject(forKey: key)
             }
             var folder: URL?
