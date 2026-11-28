@@ -47,8 +47,9 @@ The user can link any combination of the three. Spec: [`REMOTE_SOURCES.md`](REMO
 - [ ] **P2.5 Dropbox adapter** ∥ — app key config + URL scheme, sign-in, folder browser, recursive `list_folder` with saved cursor (incl. `reset`), ranged and full download.
 - [ ] **P2.6 OneDrive adapter** ∥ — Entra client id config + redirect, sign-in, folder browser, BFS `children` walk (+ `delta` on personal accounts), ranged and full download via pre-authenticated URL.
   *Done when (P2.4–P2.6):* each adapter passes tests against sanitised recorded responses (or a temp directory for iCloud), including pagination, deletions, and auth expiry.
-- [ ] **P2.7 Sync engine** — provider-agnostic: diff (new / changed / missing), bounded-concurrency metadata fetch, respects `userEditedFields`, saves cursor only on success, progress stream, cancellation, idempotent resume, multiple sources.
+- [x] **P2.7 Sync engine** — provider-agnostic: diff (new / changed / missing), bounded-concurrency metadata fetch, respects `userEditedFields`, saves cursor only on success, progress stream, cancellation, idempotent resume, multiple sources.
   *Done when:* fake-source tests cover nested folders, pagination, cursor resume, deletions, version changes, rate-limit retry, and two sources linked at once.
+  *Status:* done in `LibraryServices/SyncEngine.swift` (`SyncEngineTests`). Adds `book.localFileVersion` (migration v2) so a changed downloaded book reports `isDownloadStale`. Details in [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#as-implemented-p27-libraryservicessyncengineswift).
 - [ ] **P2.8 Sources UI** — Settings *Book Sources* section (link / change folder / unlink per service, with the outcome-stating unlink confirmation), in-app folder browser for Dropbox and OneDrive, *Sync Now* with per-source progress, library banner, re-link prompts.
 - [ ] **P2.9 On-demand download** — `DownloadManager` actor; tap-to-download with progress, cancel, atomic move, backup exclusion; *Remove Download*.
 - [ ] **P2.10 Unlink & detached books** — per [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#unlinking--detached-books): remote files untouched; not-downloaded books deleted; downloaded books detached (backup flag cleared); deleting a detached book's file deletes the book; launch-time integrity pass; re-attach on re-link.
@@ -95,7 +96,8 @@ From [`audit-stage-1-findings.md`](audit-stage-1-findings.md). High before P2.5;
 - [ ] **P4.2 Create collection / series from Settings** + manage lists.
 - [ ] **P4.3 Author name format setting** with live preview; applies app-wide immediately.
 - [ ] **P4.4 Storage & privacy settings** — downloads size, Remove All Downloads, Delete All App Data, licences, privacy policy link.
-- [ ] **P4.5 Series auto-population** from `calibre:series` / EPUB 3 collection metadata during sync (non-destructive to user assignments).
+- [x] **P4.5 Series auto-population** from `calibre:series` / EPUB 3 collection metadata during sync (non-destructive to user assignments).
+  *Status:* done with P2.7: sync (like local import) saves the EPUB's series unless the user already put the book in a series.
 
 ## Phase 5 — Reader
 

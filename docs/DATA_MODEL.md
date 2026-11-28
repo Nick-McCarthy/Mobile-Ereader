@@ -2,7 +2,7 @@
 
 SQLite via GRDB. All schema changes go through a **new, append-only** `DatabaseMigrator` migration — never edit a shipped migration.
 
-Implemented in `Packages/EreaderKit/Sources/Persistence`: `AppDatabase` (opening, configuration, Data Protection) and `Schema` (migrations; v1 = everything below). Enum-like text columns have `CHECK` constraints, foreign keys are enforced, and collection/series names are unique case-insensitively (`NOCASE`, ASCII only).
+Implemented in `Packages/EreaderKit/Sources/Persistence`: `AppDatabase` (opening, configuration, Data Protection) and `Schema` (migrations; v1 = everything below except `book.localFileVersion`, which v2 adds). Enum-like text columns have `CHECK` constraints, foreign keys are enforced, and collection/series names are unique case-insensitively (`NOCASE`, ASCII only).
 
 ## Tables
 
@@ -14,7 +14,7 @@ Implemented in `Packages/EreaderKit/Sources/Persistence`: `AppDatabase` (opening
 | `sourceId` | TEXT NULL FK → `library_source.id` (ON DELETE SET NULL) | null for local imports and for **detached** books (`sourceKind` ≠ `local` and `sourceId` is null: downloaded books whose source was unlinked; see [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#unlinking--detached-books)) |
 | `remoteId` | TEXT NULL | Dropbox `id:…`, Graph item id, or iCloud path relative to the root. UNIQUE together with `sourceId` |
 | `remotePath` | TEXT NULL | Human-readable path inside the synced root, for display/debug |
-| `remoteVersion` | TEXT NULL | Change token: Dropbox `content_hash`, OneDrive `cTag`, iCloud `<modDate>-<size>` |
+| `remoteVersion` | TEXT NULL | Change token: Dropbox `content_hash`, OneDrive `cTag`, iCloud `<modDate>-<size>`. Sync sets it only once the book's metadata for that version is saved, so null (or an old value) means "read again on the next sync" |
 | `remoteModifiedAt` | DATETIME NULL | |
 | `fileSize` | INTEGER NULL | bytes |
 | `title` | TEXT NOT NULL | Effective title (user override if set, else parsed, else `"Unknown Title"`) |
@@ -27,8 +27,9 @@ Implemented in `Packages/EreaderKit/Sources/Persistence`: `AppDatabase` (opening
 | `publicationDate` | TEXT NULL | ISO-8601 (may be year-only, e.g. `"1998"`); null renders as "Unknown" |
 | `publicationDateSort` | INTEGER NULL | `yyyymmdd`, nulls sort last |
 | `language`, `publisher`, `description`, `identifier` | TEXT NULL | Nice-to-have, cheap to capture |
-| `coverPath` | TEXT NULL | Relative path in `Caches/Covers`; null → placeholder cover |
+| `coverPath` | TEXT NULL | Relative path in `Caches/Covers`; null → placeholder cover. Covers read from the EPUB are `<bookId>.jpg` and are rewritten when the file changes, so a cover the user picks (P3.6) must use another file name |
 | `localFilePath` | TEXT NULL | Relative path under `Application Support/Books` (`remote/` or `local/`); null → not downloaded |
+| `localFileVersion` | TEXT NULL | The `remoteVersion` the downloaded file was fetched at (set by the download manager, P2.9). A downloaded book whose `remoteVersion` has moved on is stale (`Book.isDownloadStale`) and is re-downloaded on the next open. Null for local imports |
 | `downloadState` | TEXT NOT NULL | `notDownloaded` \| `downloading` \| `downloaded` \| `failed` |
 | `isUserEdited` | BOOLEAN | If true, sync must not overwrite edited fields |
 | `userEditedFields` | TEXT (JSON array) | Which fields were edited (`title`, `author`, `publicationDate`, `cover`) |
