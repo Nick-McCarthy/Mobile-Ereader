@@ -20,6 +20,8 @@ struct AppEnvironment: Sendable {
     let syncEngine: SyncEngine
     let downloads: DownloadManager
     let unlinker: SourceUnlinker
+    /// Tapping a book: open it, or download it first (P3.5).
+    let opener: BookOpener
     /// UI tests only (`-UITestLinkedFolder`): an empty folder to link as the iCloud source at launch.
     let uiTestLinkedFolder: URL?
 
@@ -38,7 +40,8 @@ struct AppEnvironment: Sendable {
         self.tokenCleanup = stores.map { OrphanedTokenCleanup(sources: sources, stores: $0) }
         self.uiTestSeedBooks = uiTestSeedBooks
         self.detachedBookCheck = DetachedBookCheck(books: repositories.books, files: files)
-        self.bookSources = BookSources(sources: sources)
+        let bookSources = BookSources(sources: sources)
+        self.bookSources = bookSources
         self.syncEngine = SyncEngine(
             books: repositories.books,
             series: repositories.series,
@@ -48,6 +51,13 @@ struct AppEnvironment: Sendable {
         let downloads = DownloadManager(books: repositories.books, files: files)
         self.downloads = downloads
         self.unlinker = SourceUnlinker(books: repositories.books, sources: sources, files: files, downloads: downloads)
+        self.opener = BookOpener(
+            books: repositories.books,
+            sources: sources,
+            files: files,
+            downloads: downloads,
+            remote: { bookSources.remote(for: $0) }
+        )
         self.uiTestLinkedFolder = uiTestLinkedFolder
     }
 
@@ -57,7 +67,18 @@ struct AppEnvironment: Sendable {
         if let uiTestLinkedFolder { _ = try? await bookSources.linkFolder(at: uiTestLinkedFolder) }
         _ = try? await tokenCleanup?.run()
         _ = try? await detachedBookCheck.run()
-        for book in uiTestSeedBooks { try? await repositories.books.save(book) }
+        for book in uiTestSeedBooks {
+            try? await repositories.books.save(book)
+            // A stand-in file, so the downloaded book opens; the reader placeholder doesn't read it.
+            if let path = book.localFilePath {
+                let url = files.url(forBookPath: path)
+                try? FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try? Data("UI test".utf8).write(to: url)
+            }
+        }
         if !uiTestSeedBooks.isEmpty { await seedUITestCollections() }
     }
 
@@ -72,8 +93,9 @@ struct AppEnvironment: Sendable {
         try? await collections.addBook("uitest-book", toCollection: favourites.id)
     }
 
-    /// A downloaded book part-read, a placeholder book not downloaded, one whose download failed, and one missing
-    /// from its folder. Remote books have no source, so they count as detached; that doesn't change how they show.
+    /// A downloaded book part-read (with a stand-in file), a placeholder book not downloaded, one whose download
+    /// failed, and one missing from its folder. Remote books have no source, so they count as detached; that doesn't
+    /// change how they show, and tapping one says its file is missing.
     private static var uiTestBooks: [Book] {
         var tombs = Book(
             id: "uitest-book",
@@ -82,6 +104,7 @@ struct AppEnvironment: Sendable {
             authorRaw: "Ursula K. Le Guin"
         )
         tombs.downloadState = .downloaded
+        tombs.localFilePath = "Books/local/uitest-book.epub"
         tombs.progression = 0.42
         tombs.publicationDate = "1971"
         tombs.publicationDateSort = 1971_0000

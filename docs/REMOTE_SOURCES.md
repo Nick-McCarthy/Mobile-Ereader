@@ -166,7 +166,7 @@ Triggered by **Sync Now** in Settings (and pull-to-refresh in the library; `BGAp
 - Rate limits are retried with the sync's `RetryPolicy`. `needsRelink` is passed on to the caller.
 - `observeProgress()` streams the progress (0…1) of every running download, for the library's badges.
 - `removeDownload(_:)` cancels a running download, then clears `localFilePath`, `localFileVersion`, and `downloadState` before deleting the file, so the database never points at a missing file. A detached book is removed from the library with its file and cover (`.removedFromLibrary`); the UI confirms first. Local imports are refused (`notDownloadable`); they're removed from the library instead.
-- Not yet: the Library's tap-to-download and the *Download* / *Remove Download* menu items (P3.5, P3.6); no source can be linked from the UI until P2.8. Downloads use the adapter's foreground `download`; a background `URLSession` comes with the Dropbox and OneDrive adapters if needed. No free-space check yet: that would add the `DiskSpace` required-reason API (`E174.1`) to the privacy manifest.
+- The Library's tap goes through `BookOpener` (P3.5, see [`UI_SPEC.md`](UI_SPEC.md#library)): it picks the source's adapter, downloads, and maps errors to what the library explains. Not yet: the *Download* / *Remove Download* menu items (P3.6). Downloads use the adapter's foreground `download`; a background `URLSession` comes with the Dropbox and OneDrive adapters if needed. No free-space check yet: that would add the `DiskSpace` required-reason API (`E174.1`) to the privacy manifest.
 
 ## Unlinking & detached books
 **Decision (owner):** unlinking never touches the user's remote files, and the library keeps only what is still readable.

@@ -38,9 +38,25 @@ private struct LibraryGridCell: View {
     let status: BookFileStatus
     let authorFormat: AuthorDisplayFormat
     let files: BookFileStore?
+    @Environment(\.openBook) private var openBook
 
     var body: some View {
         let accessibility = BookAccessibility(book: book, status: status, authorFormat: authorFormat)
+        Button {
+            openBook(book)
+        } label: {
+            content
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibility.label)
+        .accessibilityValue(accessibility.value)
+        .accessibilityHint(accessibility.hint)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("library-book")
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 4) {
             BookCover(book: book, authorFormat: authorFormat, files: files)
                 .overlay(alignment: .topTrailing) { BookFileStatusBadge(status: status) }
@@ -56,9 +72,6 @@ private struct LibraryGridCell: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibility.label)
-        .accessibilityValue(accessibility.value)
-        .accessibilityIdentifier("library-book")
+        .contentShape(Rectangle())
     }
 }

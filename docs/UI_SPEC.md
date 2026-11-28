@@ -13,6 +13,7 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
   - Long explanations go in a footnote row, not a section footer, which the audit reports as not fully scaling.
   - Section headers use `.secondaryText`.
   - Hide an action that can't be used rather than disabling it, since disabled text fails the contrast check.
+- **Navigation-bar buttons** are icons with a text label (`Button("Close", systemImage: "xmark")`): text in the bar doesn't grow with Dynamic Type, which the audit flags.
 - **Empty states** under a search bar (*No Results*) are shown centred, or in a scroll view when large Dynamic Type makes them taller than the screen (`ViewThatFits`), so they never clip. Don't size a scroll view's content from a `GeometryReader` under a collapsing search bar: the height feeds back and the layout can loop (a CI run hung that way).
 - **Accessibility audit:** `auditAccessibility(_:)` (`UITests/AuditSupport.swift`) runs `performAccessibilityAudit()` and reports every issue in one failure, on one line (xcbeautify shows only a failure's first line), each naming its element. It covers the Library, empty and as a grid and a list of books (`AccessibilityAuditTests`), Settings, and the source detail screen (`BookSourcesTests`). Add new screens. The only exclusions are in UIKit's search field, which the app can't change: its clear button (×) has a 20 pt hit area, and its fixed-height text field is reported as clipping at large sizes.
 - Decorative images (covers beside a title) are hidden from VoiceOver; progress indicators have a label.
@@ -37,6 +38,17 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
 - **Empty state:** explains how to add books, with buttons for *Connect iCloud Drive*, *Connect Dropbox*, *Connect OneDrive*, and *Import a File*.
 - **Source indicator:** a small source glyph (iCloud / Dropbox / OneDrive / device) in list rows and the Edit Details sheet. Detached books show the glyph crossed out, with "Not linked" in Edit Details. *Missing from source* books show a subtle badge.
 - **Sync banner:** slim progress banner at top while a sync is running.
+- **As implemented (P3.5):**
+  - Each grid cell, list row, and collection cover is a button that calls the `openBook` environment action. `LibraryView` passes the tap to `BookOpener` (LibraryServices):
+    - A downloaded book with its file on the device opens at once.
+    - A book that isn't downloaded is downloaded through `DownloadManager`, with its progress badge, then opens.
+    - Tapping a book that is downloading cancels the download.
+    - A downloaded copy that changed in its source (`isDownloadStale`) is downloaded again first, but opens as it is if that fails, so it still reads offline.
+    - Opening sets `lastOpenedAt`, which moves the book to the front of Recently Viewed.
+  - The reader is `ReaderPlaceholderView` (a full-screen cover with the title and a *Close* button, an `xmark` icon) until P5.1.
+  - A failed tap shows an alert named for `BookOpenError`: *You're Offline* (URL errors such as no connection or timeout), *Link the Folder Again*, *Book Not Found* (missing from the source), *Book Changed* (size mismatch: sync and retry), *Can't Download* (no adapter for the source in this version), *Book File Missing* (a local or detached book whose file is gone), *Download Failed*.
+  - VoiceOver: each book has the button trait and a hint: "Opens the book.", "Downloads and opens the book.", or "Cancels the download."
+  - Tests: `BookOpenerTests` (open, download then open, tap again cancels, failures, missing local file, stale copy online and offline, error mapping). UI test `LibraryOpenTests`: opening the seeded downloaded book (which has a stand-in file), Recently Viewed order after it, and the alert for a book with no file.
 - **As implemented (P3.4):**
   - *Collections* is the third choice in the *View* menu (`LibraryViewMode.collections`). `LibraryCollectionsView` is an inset-grouped `List` of `CollapsibleBookSection`s (`App/Features/Collections/`, shared with the Collections tab in P4.1): one per collection in the user's order, then *Not in a Collection*. A book in several collections shows in each.
   - The books are the library's current results, so the sort order and search apply inside each section. `LibrarySection.byCollection` (Persistence) does the grouping and leaves out sections with no books (empty collections, or none matching the search). The memberships come from `CollectionRepository.observeMemberships()`.
