@@ -463,6 +463,12 @@ public struct DatabaseLibrarySourceRepository: LibrarySourceRepository {
         }
     }
 
+    public func saveRootBookmark(id: LibrarySource.ID, bookmark: Data?) async throws {
+        try await database.writer.write { db in
+            try db.execute(sql: "UPDATE library_source SET rootBookmark = ? WHERE id = ?", arguments: [bookmark, id])
+        }
+    }
+
     public func recordSyncSuccess(id: LibrarySource.ID, cursor: String?, at date: Date) async throws {
         try await database.writer.write { db in
             try db.execute(

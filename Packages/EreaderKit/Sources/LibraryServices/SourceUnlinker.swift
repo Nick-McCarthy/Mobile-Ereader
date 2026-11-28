@@ -48,16 +48,20 @@ public struct SourceUnlinker: Sendable {
     }
 
     /// Unlinks the source: stops its downloads, signs out of `remote` (revoking where the provider allows and
-    /// deleting the Keychain tokens), then removes or detaches its books in one transaction.
+    /// deleting the Keychain tokens), then removes or detaches its books in one transaction. `remote` is nil
+    /// when this version has no adapter for the service; there is then nothing to sign out of.
     @discardableResult
     @concurrent
-    public func unlink(sourceId: LibrarySource.ID, remote: any RemoteSource) async throws -> SourceUnlinkChanges {
+    public func unlink(
+        sourceId: LibrarySource.ID,
+        remote: (any RemoteSource)?
+    ) async throws -> SourceUnlinkChanges {
         let affected = try await books.books(inSource: sourceId)
         // A download finishing after the unlink would attach a file to a book that is already gone or detached.
         await downloads?.cancelAndWait(affected.map(\.id))
         // Signing out can fail (offline, revoked already). The tokens left behind are deleted at the next launch
         // by `OrphanedTokenCleanup`, since no linked source owns them, so a failure doesn't stop the unlink.
-        try? await remote.unlink()
+        try? await remote?.unlink()
 
         let changes = try await sources.unlinkSource(id: sourceId)
         for book in changes.removed {

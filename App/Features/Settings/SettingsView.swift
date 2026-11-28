@@ -1,20 +1,33 @@
+import Persistence
 import SwiftUI
 
-/// Settings tab: book sources and sync, library options, storage, privacy (action plan P2.8, Phase 4).
+/// Settings tab: book sources and sync (P2.8); library options, storage, and privacy arrive in Phase 4.
 struct SettingsView: View {
+    @Environment(\.appEnvironment) private var environment
+    @State private var sources: [LibrarySource] = []
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("Book Sources") {
-                    Label("iCloud Drive / Files", systemImage: "icloud")
-                    Label("Dropbox", systemImage: "shippingbox")
-                    Label("OneDrive", systemImage: "cloud")
-                }
+                BookSourcesSection(sources: sources)
                 Section("About") {
                     LabeledContent("Version", value: Self.appVersion)
                 }
             }
             .navigationTitle("Settings")
+            .navigationDestination(for: SourceRoute.self) { route in
+                SourceDetailView(sourceId: route.id)
+            }
+        }
+        .task {
+            guard let environment else { return }
+            do {
+                for try await latest in environment.repositories.sources.observeSources() {
+                    sources = latest
+                }
+            } catch {
+                sources = []
+            }
         }
     }
 

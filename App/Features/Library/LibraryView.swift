@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 struct LibraryView: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(BookImportController.self) private var importController
+    @Environment(SyncCoordinator.self) private var sync
     @AppStorage("authorDisplayFormat") private var authorFormat = AuthorDisplayFormat.asStored
     @State private var books: [Book] = []
     @State private var showingImporter = false
@@ -27,8 +28,10 @@ struct LibraryView: View {
                     List(books) { book in
                         BookRow(book: book, authorFormat: authorFormat, files: environment?.files)
                     }
+                    .refreshable { await sync.sync() }
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) { SyncBanner() }
             // On the content rather than the stack, so it doesn't share a view with the error alert.
             .alert(
                 "Already in Your Library",
