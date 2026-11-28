@@ -13,6 +13,8 @@ struct AppEnvironment: Sendable {
     let tokenCleanup: OrphanedTokenCleanup?
     /// UI tests only (`-UITestSeedBook`): a book to show, so audits see a non-empty library.
     let uiTestSeedBook: Book?
+    /// Removes detached books whose file is gone (docs/REMOTE_SOURCES.md#unlinking--detached-books).
+    let detachedBookCheck: DetachedBookCheck
 
     init(database: AppDatabase, files: BookFileStore, usesKeychain: Bool = true, uiTestSeedBook: Book? = nil) {
         self.repositories = DatabaseRepositories(database: database)
@@ -22,13 +24,15 @@ struct AppEnvironment: Sendable {
         let stores = usesKeychain ? OrphanedTokenCleanup.keychainStores() : nil
         self.tokenCleanup = stores.map { OrphanedTokenCleanup(sources: sources, stores: $0) }
         self.uiTestSeedBook = uiTestSeedBook
+        self.detachedBookCheck = DetachedBookCheck(books: repositories.books, files: files)
     }
 
-    /// One-off work at launch: seeds the UI-test book, then removes Keychain tokens left by an earlier
-    /// install (finding F-A1).
+    /// One-off work at launch: seeds the UI-test book, removes Keychain tokens left by an earlier install
+    /// (finding F-A1), and removes detached books whose file is gone.
     func prepareAtLaunch() async {
         if let uiTestSeedBook { try? await repositories.books.save(uiTestSeedBook) }
         _ = try? await tokenCleanup?.run()
+        _ = try? await detachedBookCheck.run()
     }
 
     private static let uiTestBook = Book(

@@ -83,6 +83,15 @@ public actor DownloadManager {
         tasks[bookId]?.cancel()
     }
 
+    /// Cancels the downloads of these books and waits until each has stopped (and restored its state).
+    public func cancelAndWait(_ bookIds: [Book.ID]) async {
+        for bookId in bookIds {
+            guard let running = tasks[bookId] else { continue }
+            running.cancel()
+            _ = try? await running.value
+        }
+    }
+
     /// Deletes the book's downloaded file (cancelling a running download first). A detached book can't be
     /// downloaded again, so it is removed from the library along with its file and cover; the UI must have
     /// asked first (UI_SPEC "Remove Download & Book").

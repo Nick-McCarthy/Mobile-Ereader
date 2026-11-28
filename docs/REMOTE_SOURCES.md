@@ -29,7 +29,7 @@ As implemented (P2.1, `RemoteSources/RemoteSource.swift`):
 - `ByteRangeReading` lives in Core (so `EPUBMetadata` can use it without depending on `RemoteSources`): `func length() async throws -> Int64` and `func read(_ range: Range<Int64>) async throws -> Data`.
 - Errors are `RemoteSourceError`: `.cancelled`, `.needsRelink`, `.rateLimited(retryAfter:)`, `.notFound`.
 - `LinkedAccount(label:)` is what Settings shows after linking. `RemoteFolder.root` (id `""`) is the whole drive.
-- `library_source` rows are read and written through `LibrarySourceRepository` (Persistence): add (one per service; `.local` is refused), change root (clears the cursor), record sync success (cursor, `ok`, time) or failure (status and message; the cursor is kept). Unlinking arrives with P2.10.
+- `library_source` rows are read and written through `LibrarySourceRepository` (Persistence): add (one per service; `.local` is refused), change root (clears the cursor), record sync success (cursor, `ok`, time) or failure (status and message; the cursor is kept). Unlinking is `unlinkSource` (P2.10, below).
 
 - **Linking:** the user can link **any combination** of the three. Each linked source has **one root folder** (a row in `library_source`). *Sync Now* syncs every linked source, each independently.
 - **Identity:** a book is unique per `(sourceId, remoteId)`. The same file in two sources shows up as two books (no cross-source de-duplication in v1).
@@ -169,6 +169,14 @@ Triggered by **Sync Now** in Settings (and pull-to-refresh in the library; `BGAp
 3. **Downloaded books stay** and become **detached**: `sourceId` is set to null, while `sourceKind`, `remoteId` and `remotePath` are kept. Because the local copy is now the only copy, clear `isExcludedFromBackup` on the file so it's included in device backups. Detached books open and behave like any other downloaded book.
 4. **If a detached book's file is deleted, the book is removed from the database.** This covers *Remove Download*, *Remove All Downloads*, and a file found missing or unreadable (checked when opening the book and during a lightweight launch-time integrity pass). The book's bookmarks, position, and memberships go with it. *Remove Download* on a detached book shows a confirmation: "This book is no longer linked to <service>. Removing the download will remove it from your library."
 5. **Re-linking the same service** later: before inserting new rows, sync matches detached books by `(sourceKind, remoteId)` and re-attaches them (sets `sourceId`, restores `isExcludedFromBackup`), so bookmarks and progress survive and no duplicates appear. For iCloud, where `remoteId` is a relative path, also require the same `remoteVersion` to re-attach.
+
+### As implemented (P2.10, `LibraryServices/SourceUnlinker.swift`)
+- `SourceUnlinker.preview(sourceId:)` gives the confirmation's counts (`notDownloaded`, `downloaded`; "downloaded" means the book has a `localFilePath`).
+- `unlink(sourceId:remote:)` first cancels the source's running downloads and waits for them (`DownloadManager.cancelAndWait`), so none finishes onto a removed or detached book. Then it calls `remote.unlink()`. A failure there doesn't stop the unlink: tokens left behind belong to no linked source, so `OrphanedTokenCleanup` deletes them at the next launch.
+- `LibrarySourceRepository.unlinkSource(id:)` does rules 2 and 3 in one transaction: delete the books without a file (cascades and the `book_ad` trigger remove their bookmarks, position, memberships and search rows), set `sourceId = NULL` on the rest, and delete the source row. Afterwards the removed books' covers are deleted, and the detached files are put back into backups.
+- `DetachedBookCheck.run()` (rule 4) removes detached books whose file is missing or unreadable, with their cover. It runs in `AppEnvironment.prepareAtLaunch`. `removeIfFileMissing(_:)` checks one book; the reader (P5.1) calls it when opening a book. *Remove Download* on a detached book is `DownloadManager.removeDownload` (P2.9).
+- Re-attach (rule 5) happens in the sync diff: a listed file with no book in the source, but a detached book of the same kind with that `remoteId` (on iCloud, also the same `remoteVersion`), rejoins the source (`BookListingChanges.reattached`). Its file leaves backups again. If its version differs, its metadata is re-read and the download becomes stale.
+- Not yet: the Settings screens that call this (P2.8).
 
 The confirmation dialog for *Unlink* states the outcome up front: "N books that aren't downloaded will be removed from your library. M downloaded books will stay. Your files in <service> won't be changed."
 

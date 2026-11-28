@@ -62,6 +62,19 @@ public struct DatabaseBookRepository: BookRepository {
         }
     }
 
+    public func detachedBooks(kind: SourceKind?) async throws -> [Book] {
+        try await database.writer.read { db in
+            if let kind {
+                return try Book.fetchAll(
+                    db,
+                    sql: "SELECT * FROM book WHERE sourceId IS NULL AND sourceKind = ?",
+                    arguments: [kind.rawValue]
+                )
+            }
+            return try Book.fetchAll(db, sql: "SELECT * FROM book WHERE sourceId IS NULL AND sourceKind != 'local'")
+        }
+    }
+
     public func applyListing(_ changes: BookListingChanges) async throws {
         guard !changes.isEmpty else { return }
         try await database.writer.write { db in
@@ -79,6 +92,19 @@ public struct DatabaseBookRepository: BookRepository {
             }
             for id in changes.missing {
                 try db.execute(sql: "UPDATE book SET isMissingFromSource = 1 WHERE id = ?", arguments: [id])
+            }
+            for book in changes.reattached {
+                let listing = book.listing
+                try db.execute(
+                    sql: """
+                        UPDATE book
+                        SET sourceId = ?, remotePath = ?, fileSize = ?, remoteModifiedAt = ?, isMissingFromSource = 0
+                        WHERE id = ?
+                        """,
+                    arguments: [
+                        book.sourceId, listing.remotePath, listing.fileSize, listing.remoteModifiedAt, listing.id,
+                    ]
+                )
             }
         }
     }
@@ -447,6 +473,25 @@ public struct DatabaseLibrarySourceRepository: LibrarySourceRepository {
                     """,
                 arguments: [cursor, date, id]
             )
+        }
+    }
+
+    public func unlinkSource(id: LibrarySource.ID) async throws -> SourceUnlinkChanges {
+        try await database.writer.write { db in
+            let books = try Book.fetchAll(db, sql: "SELECT * FROM book WHERE sourceId = ?", arguments: [id])
+            var changes = SourceUnlinkChanges()
+            for book in books {
+                if book.localFilePath == nil {
+                    // Cascades remove its bookmarks, position, and memberships; a trigger removes its search row.
+                    _ = try Book.deleteOne(db, key: book.id)
+                    changes.removed.append(book)
+                } else {
+                    changes.detached.append(book)
+                }
+            }
+            try db.execute(sql: "UPDATE book SET sourceId = NULL WHERE sourceId = ?", arguments: [id])
+            _ = try LibrarySource.deleteOne(db, key: id)
+            return changes
         }
     }
 

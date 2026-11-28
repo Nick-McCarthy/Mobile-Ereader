@@ -53,8 +53,9 @@ The user can link any combination of the three. Spec: [`REMOTE_SOURCES.md`](REMO
 - [ ] **P2.8 Sources UI** — Settings *Book Sources* section (link / change folder / unlink per service, with the outcome-stating unlink confirmation), in-app folder browser for Dropbox and OneDrive, *Sync Now* with per-source progress, library banner, re-link prompts.
 - [x] **P2.9 On-demand download** — `DownloadManager` actor; tap-to-download with progress, cancel, atomic move, backup exclusion; *Remove Download*.
   *Status:* the `DownloadManager` actor is done (`DownloadManagerTests`). Details in [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#as-implemented-p29-libraryservicesdownloadmanagerswift). The tap and menu items are wired up in P3.5 and P3.6, once P2.8 lets a source be linked.
-- [ ] **P2.10 Unlink & detached books** — per [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#unlinking--detached-books): remote files untouched; not-downloaded books deleted; downloaded books detached (backup flag cleared); deleting a detached book's file deletes the book; launch-time integrity pass; re-attach on re-link.
+- [x] **P2.10 Unlink & detached books** — per [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#unlinking--detached-books): remote files untouched; not-downloaded books deleted; downloaded books detached (backup flag cleared); deleting a detached book's file deletes the book; launch-time integrity pass; re-attach on re-link.
   *Done when:* tests cover unlink with mixed downloaded/not-downloaded books, cascade cleanup, Remove Download on a detached book, a missing detached file, and re-link re-attachment without duplicates.
+  *Status:* done (`SourceUnlinkTests`; Remove Download on a detached book is in `DownloadManagerTests`). Details in [`REMOTE_SOURCES.md`](REMOTE_SOURCES.md#as-implemented-p210-libraryservicessourceunlinkerswift). The Settings UI that calls it is P2.8.
 
 ## Audit stage 1 fixes
 From [`audit-stage-1-findings.md`](audit-stage-1-findings.md). High before P2.5; Medium before P2.7 unless noted; each with its own test and CI run.

@@ -44,6 +44,8 @@ public protocol BookRepository: Sendable {
 
     /// Every book of the linked source, missing ones included.
     func books(inSource sourceId: LibrarySource.ID) async throws -> [Book]
+    /// Detached books (downloaded books whose source was unlinked), of one kind or, with nil, all of them.
+    func detachedBooks(kind: SourceKind?) async throws -> [Book]
     /// Applies what one listing found, in a single transaction.
     func applyListing(_ changes: BookListingChanges) async throws
     /// Reads the book, changes it, and saves it in one transaction, so an edit made meanwhile isn't lost.
@@ -60,15 +62,48 @@ public struct BookListingChanges: Equatable, Sendable {
     public var relisted: [RelistedBook]
     /// Books the source no longer has. They are kept, flagged `isMissingFromSource`.
     public var missing: [Book.ID]
+    /// Detached books found again after the service was re-linked: they rejoin the source (`sourceId`), and
+    /// are updated like `relisted` ones. See docs/REMOTE_SOURCES.md#unlinking--detached-books.
+    public var reattached: [ReattachedBook]
 
-    public init(inserted: [Book] = [], relisted: [RelistedBook] = [], missing: [Book.ID] = []) {
+    public init(
+        inserted: [Book] = [],
+        relisted: [RelistedBook] = [],
+        missing: [Book.ID] = [],
+        reattached: [ReattachedBook] = []
+    ) {
         self.inserted = inserted
         self.relisted = relisted
         self.missing = missing
+        self.reattached = reattached
     }
 
     public var isEmpty: Bool {
-        inserted.isEmpty && relisted.isEmpty && missing.isEmpty
+        inserted.isEmpty && relisted.isEmpty && missing.isEmpty && reattached.isEmpty
+    }
+}
+
+/// A detached book that rejoins a re-linked source.
+public struct ReattachedBook: Equatable, Sendable {
+    public var sourceId: LibrarySource.ID
+    public var listing: RelistedBook
+
+    public init(sourceId: LibrarySource.ID, listing: RelistedBook) {
+        self.sourceId = sourceId
+        self.listing = listing
+    }
+}
+
+/// What unlinking a source did to its books, so their files can be tidied up afterwards.
+public struct SourceUnlinkChanges: Equatable, Sendable {
+    /// Books that weren't downloaded: deleted, with their bookmarks, position, memberships and search rows.
+    public var removed: [Book]
+    /// Downloaded books: kept, with `sourceId` cleared (as stored before the change).
+    public var detached: [Book]
+
+    public init(removed: [Book] = [], detached: [Book] = []) {
+        self.removed = removed
+        self.detached = detached
     }
 }
 
@@ -145,7 +180,10 @@ public protocol LibrarySourceRepository: Sendable {
     func recordSyncSuccess(id: LibrarySource.ID, cursor: String?, at date: Date) async throws
     /// After a failed sync. The cursor is left as it was, so the next sync repeats the work.
     func recordSyncFailure(id: LibrarySource.ID, status: SourceStatus, message: String?) async throws
-    // Unlinking (which also removes or detaches the source's books) arrives with P2.10.
+    /// Unlinks the source in one transaction: deletes its books that have no downloaded file, detaches the
+    /// rest (`sourceId` set to null), and deletes the source row. Remote files aren't touched. Collections and
+    /// series stay, even if they end up empty.
+    func unlinkSource(id: LibrarySource.ID) async throws -> SourceUnlinkChanges
 }
 
 public protocol ReadingPositionRepository: Sendable {
