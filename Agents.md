@@ -25,6 +25,20 @@ Original requirements: [`Concept.md`](Concept.md) — the source of truth if any
 | [`docs/SECURITY_AND_APP_STORE.md`](docs/SECURITY_AND_APP_STORE.md) | Anything involving network, storage, credentials, untrusted input, privacy manifest, or release. |
 | [`docs/CI_AND_BUILD.md`](docs/CI_AND_BUILD.md) | Touching `project.yml`, GitHub Actions workflows, signing, or release; or wondering how to verify your change. |
 | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) | Writing any code: style, concurrency, testing, git/branch rules, definition of done. |
+| [`docs/audit-stage-1.md`](docs/audit-stage-1.md) | Auditing P0–P2.4 (security, untrusted input, concurrency, tests, UI, accessibility, compliance): the checks, which skills to use, and the leads. Results are in [`docs/audit-stage-1-findings.md`](docs/audit-stage-1-findings.md); the fixes are tasks `A1.n` in the action plan. |
+
+## Agent skills (`/skills`)
+Third-party skills (MIT) with general Swift / iOS guidance. Open a skill's `SKILL.md` when your task matches. It tells you which of its `references/` files to load; load only those. **The project's own rules win:** where a skill conflicts with this file or `/docs` (for example, it assumes a newer iOS target, SwiftData, or a local simulator), follow the project. Sources, authors, and pinned commits are in [`skills/README.md`](skills/README.md).
+
+| Skill | Use it when you are… |
+|---|---|
+| [`skills/swiftui-pro`](skills/swiftui-pro/SKILL.md) | Writing or reviewing SwiftUI views: modern APIs, data flow, navigation, layout, performance (Library, Collections, Settings, reader chrome). |
+| [`skills/swift-concurrency-pro`](skills/swift-concurrency-pro/SKILL.md) | Writing or reviewing async code, actors, task groups, streams, cancellation, or fixing Swift 6 strict-concurrency errors (sync engine, downloads, remote sources). |
+| [`skills/swift-testing-pro`](skills/swift-testing-pro/SKILL.md) | Writing or reviewing Swift Testing tests (`@Test`, `#expect`, parameterised and async tests). |
+| [`skills/swift-security-expert`](skills/swift-security-expert/SKILL.md) | Touching the Keychain, OAuth token storage, credential lifecycle, CryptoKit, or certificate trust. Read alongside [`SECURITY_AND_APP_STORE.md`](docs/SECURITY_AND_APP_STORE.md). |
+| [`skills/ios-accessibility`](skills/ios-accessibility/SKILL.md) | Making screens and the reader work with VoiceOver, Dynamic Type, Voice Control, Switch Control, or Full Keyboard Access, and testing that they do. |
+| [`skills/background-execution`](skills/background-execution/SKILL.md) | Adding background sync (`BGAppRefreshTask`), finishing work as the app backgrounds, or background `URLSession` downloads. |
+| [`skills/appstore-review`](skills/appstore-review/SKILL.md) | Preparing a TestFlight or App Store submission: privacy manifest, export compliance, metadata, rejection risks. Run it only when asked. |
 
 ## Ground rules for agents
 1. **Work from the action plan.** Name the task id in your branch and commits; tick the box when done.

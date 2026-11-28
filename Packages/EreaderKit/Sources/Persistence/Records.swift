@@ -202,3 +202,43 @@ public struct ReadingPosition: Codable, Equatable, Sendable, FetchableRecord, Pe
         self.updatedAt = updatedAt
     }
 }
+
+/// A linked iCloud Drive / Files, Dropbox, or OneDrive folder (`library_source` table).
+/// Tokens are never stored here; they live in the Keychain under this row's `id`.
+public struct LibrarySource: Codable, Equatable, Identifiable, Sendable, FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "library_source"
+
+    public var id: String
+    /// Never `.local`: local imports have no source row.
+    public var kind: SourceKind
+    /// Display name or email, shown in Settings.
+    public var accountLabel: String?
+    /// Provider folder id (Dropbox path or id, Graph item id). Empty means the whole drive.
+    public var rootId: String?
+    /// Security-scoped bookmark of the iCloud Drive / Files folder.
+    public var rootBookmark: Data?
+    public var rootDisplayPath: String
+    /// Where the next incremental sync starts. Nil means a full listing.
+    public var syncCursor: String?
+    public var status: SourceStatus
+    public var lastSyncedAt: Date?
+    /// Short, non-sensitive message for Settings.
+    public var lastSyncError: String?
+
+    public init(
+        id: String = UUID().uuidString,
+        kind: SourceKind,
+        accountLabel: String? = nil,
+        rootId: String? = nil,
+        rootBookmark: Data? = nil,
+        rootDisplayPath: String = "/"
+    ) {
+        self.id = id
+        self.kind = kind
+        self.accountLabel = accountLabel
+        self.rootId = rootId
+        self.rootBookmark = rootBookmark
+        self.rootDisplayPath = rootDisplayPath
+        self.status = .ok
+    }
+}

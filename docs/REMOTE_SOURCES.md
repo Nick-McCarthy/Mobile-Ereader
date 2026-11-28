@@ -24,6 +24,13 @@ protocol RemoteSource: Sendable {
 
 `RemoteFile` holds `remoteId`, `displayPath`, `name`, `size`, `version` (provider-specific change token), `modifiedAt`.
 
+As implemented (P2.1, `RemoteSources/RemoteSource.swift`):
+- `enumerateEPUBs` returns a `RemoteChangeStream` of `RemoteChange`: `.reset`, `.upsert(RemoteFile)`, `.removed(remoteId:)`, `.cursor(SyncCursor)`. Every **full** listing (no cursor, or one the provider rejects, such as a Dropbox `reset` or a Graph `410`) starts with `.reset`. After it, any book of that source not upserted before the final `.cursor` is missing from the source. An incremental listing has no `.reset` and reports deletions as `.removed`. Every listing ends with `.cursor`, which the engine saves only after processing everything.
+- `ByteRangeReading` lives in Core (so `EPUBMetadata` can use it without depending on `RemoteSources`): `func length() async throws -> Int64` and `func read(_ range: Range<Int64>) async throws -> Data`.
+- Errors are `RemoteSourceError`: `.cancelled`, `.needsRelink`, `.rateLimited(retryAfter:)`, `.notFound`.
+- `LinkedAccount(label:)` is what Settings shows after linking. `RemoteFolder.root` (id `""`) is the whole drive.
+- `library_source` rows are read and written through `LibrarySourceRepository` (Persistence): add (one per service; `.local` is refused), change root (clears the cursor), record sync success (cursor, `ok`, time) or failure (status and message; the cursor is kept). Unlinking arrives with P2.10.
+
 - **Linking:** the user can link **any combination** of the three. Each linked source has **one root folder** (a row in `library_source`). *Sync Now* syncs every linked source, each independently.
 - **Identity:** a book is unique per `(sourceId, remoteId)`. The same file in two sources shows up as two books (no cross-source de-duplication in v1).
 
@@ -45,6 +52,24 @@ protocol RemoteSource: Sendable {
 - **Tokens:** store the access and refresh tokens in the **Keychain** (`kSecClassGenericPassword`, service `ereader.<kind>`, account = `library_source.id`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`). Never put them in UserDefaults, the database, files, or logs. Refresh proactively when within 5 minutes of expiry; on refresh failure, mark the source *needs re-link*.
 - **App credentials** (Dropbox app key, Microsoft client id) are not secrets for public clients, but keep them in `Config/Secrets.xcconfig` (git-ignored; a committed `Secrets.example.xcconfig` documents the keys). No client secrets ever ship in the app.
 - **Unlink:** revoke server-side where the API allows (Dropbox `POST /2/auth/token/revoke`; Microsoft has no per-token revoke for consumer apps, so delete the tokens locally and link to account.live.com/consent/Manage in the UI). Then delete the Keychain items and the `library_source` row, and apply the library rules in [Unlinking & detached books](#unlinking--detached-books).
+
+### Implementation (P2.2, `RemoteSources/OAuth`)
+- `OAuthConfiguration`: authorize / token URLs, client id, redirect URI (its scheme is the callback scheme), scopes, extra authorise parameters, and revocation (`.none` or `.bearerPost(url)`).
+- `OAuthClient.signIn(using:)`:
+  1. builds the URL with a fresh 16-byte `state` and a PKCE pair (32 random bytes → 43-character verifier, `S256` challenge)
+  2. opens it with a `WebAuthenticator`
+  3. checks the callback (the `state` must match before anything else is read, including `error`)
+  4. exchanges the code with the verifier
+  `refresh` keeps the old refresh token if the response omits one. `revoke` posts the bearer token when configured.
+- `SystemWebAuthenticator` (iOS) wraps `ASWebAuthenticationSession` with `prefersEphemeralWebBrowserSession = true`. Closing the sheet throws `RemoteSourceError.cancelled`.
+- `TokenProvider` (actor, one per linked source):
+  - `validAccessToken()` refreshes when fewer than 5 minutes remain, and concurrent callers share one refresh.
+  - `forceRefresh()` is for a `401`.
+  - `signOut()` revokes on a best-effort basis, then deletes the tokens.
+  - A refresh rejected with 400 / 401 (or no refresh token) becomes `RemoteSourceError.needsRelink`. Network errors pass through so a retry can work.
+- `TokenStore` → `KeychainTokenStore`: generic password, service `ereader.<kind>`, account `library_source.id`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, data-protection keychain, value = JSON. `storedSourceIds()` lists the accounts that have items.
+- Keychain items survive deleting the app, but the database doesn't. At every launch, `OrphanedTokenCleanup` (LibraryServices) deletes Dropbox and OneDrive items whose source id isn't the linked source of that kind (audit A1.2). UI tests (`-UITestMode`) skip it and never touch the Keychain. `OAuthTokens` redacts itself in `description`. Tests use `InMemoryTokenStore` (RemoteSourcesTesting) and check the Keychain query attributes rather than the real Keychain, which unsigned `swift test` binaries can't use.
+- All HTTP goes through `HTTPClient` (`URLSession.ephemeralClient`: no cookies, cache, or stored credentials), so tests use recorded responses and never reach the network.
 
 ### Dropbox specifics
 - App Console: **Scoped access**, **Full Dropbox** access type (so the user can choose any folder). Enable only the three read scopes above. Redirect URI: `db-<APP_KEY>://2/token` (register the URL scheme in `Info.plist`).
@@ -69,6 +94,25 @@ protocol RemoteSource: Sendable {
 - `remoteId` = path relative to the root, so a rename looks like remove + add. That's acceptable: reading data is matched by the `isMissingFromSource` flow and the user can merge in a later version.
 - Metadata needs the bytes locally. For each new or changed item: do a coordinated read (`NSFileCoordinator`, `.withoutChanges`), which makes iCloud fetch the file. Parse it in place with `ReadiumZIPFoundation`, then call `FileManager.evictUbiquitousItem(at:)` if it wasn't downloaded before, to avoid filling the device. Limit to 2 concurrent fetches.
 - "Download" in the library means copying the file into the app's own `Books/remote/` folder (offline-safe, protected, consistent with the other sources).
+
+#### As implemented (P2.4, `RemoteSources/Files`)
+- `FilesRemoteSource(bookmark:picker:)` is an actor.
+  - `link()` asks a `FolderPicking` for a folder. The app supplies the `UIDocumentPickerViewController` implementation with the Settings UI in P2.8.
+  - `link(folderAt:)` keeps a bookmark to the folder. The account label is the folder's name.
+  - The caller saves `bookmark` to `library_source.rootBookmark` after `link`, after each sync (a stale bookmark is re-created in place), and after `unlink` (which only forgets it).
+  - A missing bookmark, one that won't resolve, or a folder that's gone throws `needsRelink`.
+- Every listing is a full one: `.reset`, then every book, then a `files:<time>` cursor.
+  - The walk runs off the source's actor (`@concurrent`), yields each book as it finds it (in file-system order, not sorted), and checks cancellation before every item, so stopping a sync of a huge folder is prompt (audit A1.5).
+  - Ids are paths relative to the picked folder, so listing a sub-folder still gives root-relative ids.
+  - Hidden files and folders and package contents are skipped.
+  - `.Name.epub.icloud` is listed as `Name.epub`. Its size comes from the real item when the system has it, otherwise nil. A real file wins over a leftover placeholder with the same name: the placeholder is skipped when the real file exists.
+  - `version` is `<modified ms>-<size>`.
+- Ids containing `.` or `..` are rejected (`notFound`), so a stored id can't reach outside the folder.
+- `byteRangeReader` is nil. Metadata uses `download` to a temporary file instead of parsing in place, because `NSFileCoordinator`'s accessor is synchronous and the parser is async.
+  - `download` does a coordinated `.withoutChanges` read on its own queue and copies the file.
+  - If the file wasn't on the device before, it is evicted again afterwards.
+  - Progress is reported only as 0 and 1.
+- Tests run against a temporary folder tree with placeholder names (`RemoteSourcesTests/FilesRemoteSourceTests`).
 
 ## Folder browser
 - Dropbox and OneDrive: an in-app browser with breadcrumbs, a *This Folder* button, and a *Whole Dropbox/OneDrive* shortcut. Persist the folder id and display path to `library_source`.
@@ -106,6 +150,6 @@ Triggered by **Sync Now** in Settings (and pull-to-refresh in the library; `BGAp
 The confirmation dialog for *Unlink* states the outcome up front: "N books that aren't downloaded will be removed from your library. M downloaded books will stay. Your files in <service> won't be changed."
 
 ## Testing
-- Each adapter has a fake: `FakeRemoteSource` (configurable tree, pagination, cursors, deletions, 429s, auth expiry) for `SyncEngine` tests.
+- Each adapter has a fake: `FakeRemoteSource` (configurable tree, pagination, cursors, deletions, 429s, auth expiry) for `SyncEngine` tests. It lives in the `RemoteSourcesTesting` package target, which only test targets depend on. Paths double as remote ids; `putFile` / `removeFile` change the tree, and `rateLimitNext`, `expireAuth`, `invalidateCursors`, and `failEnumeration(afterPages:)` inject failures. Its ranged reader counts reads (`rangeReadCount`). The P2.3 "≤5 reads per book" check lives in `EPUBMetadataTests/RemoteZipReaderTests` and uses its own counting reader. Adapters whose server answers a ranged request with `200` should throw `ByteRangeError.rangeNotSupported`, which makes `EPUBMetadataReader` fall back to a full download.
 - Adapter unit tests decode recorded **sanitised** JSON fixtures of Dropbox and Graph responses. Never hit real APIs in CI. Never commit real tokens or account data.
 - The iCloud adapter is tested against a temporary local directory tree (including fake `.icloud` placeholder names).

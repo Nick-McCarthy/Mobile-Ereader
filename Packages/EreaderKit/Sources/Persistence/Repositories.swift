@@ -24,6 +24,10 @@ public enum RepositoryError: Error, Equatable, Sendable {
     case emptyName
     /// Another collection or series already has this name (ignoring case).
     case duplicateName
+    /// That service is already linked (v1 allows one folder per service).
+    case sourceAlreadyLinked
+    /// Local imports have no source row.
+    case localIsNotASource
 }
 
 public protocol BookRepository: Sendable {
@@ -61,6 +65,8 @@ public protocol SeriesRepository: Sendable {
     func series(containing bookId: Book.ID) async throws -> (series: Series, position: Double?)?
     /// Throws `RepositoryError` for empty or duplicate names.
     func createSeries(named name: String) async throws -> Series
+    /// The series with this name (ignoring case), created if there is none. Throws `RepositoryError.emptyName`.
+    func findOrCreateSeries(named name: String) async throws -> Series
     func renameSeries(id: Series.ID, to name: String) async throws
     /// Deletes the series. Its books stay in the library.
     func deleteSeries(id: Series.ID) async throws
@@ -73,6 +79,27 @@ public protocol BookmarkRepository: Sendable {
     func observeBookmarks(forBook bookId: Book.ID) -> AsyncThrowingStream<[Bookmark], any Error>
     func addBookmark(_ bookmark: Bookmark) async throws
     func deleteBookmark(id: Bookmark.ID) async throws
+}
+
+public protocol LibrarySourceRepository: Sendable {
+    /// Linked sources, in `SourceKind` order.
+    func observeSources() -> AsyncThrowingStream<[LibrarySource], any Error>
+    func source(id: LibrarySource.ID) async throws -> LibrarySource?
+    func source(kind: SourceKind) async throws -> LibrarySource?
+    /// Records a newly linked source. Throws `RepositoryError.sourceAlreadyLinked` or `.localIsNotASource`.
+    func addSource(_ source: LibrarySource) async throws
+    /// Points the source at a different folder. Clears the sync cursor, so the next sync is a full listing.
+    func changeRoot(
+        id: LibrarySource.ID,
+        rootId: String?,
+        rootBookmark: Data?,
+        rootDisplayPath: String
+    ) async throws
+    /// After a complete sync: saves the cursor, marks the source healthy, and clears any error.
+    func recordSyncSuccess(id: LibrarySource.ID, cursor: String?, at date: Date) async throws
+    /// After a failed sync. The cursor is left as it was, so the next sync repeats the work.
+    func recordSyncFailure(id: LibrarySource.ID, status: SourceStatus, message: String?) async throws
+    // Unlinking (which also removes or detaches the source's books) arrives with P2.10.
 }
 
 public protocol ReadingPositionRepository: Sendable {

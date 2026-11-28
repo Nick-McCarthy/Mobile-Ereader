@@ -9,6 +9,7 @@ public struct DatabaseRepositories: Sendable {
     public let series: any SeriesRepository
     public let bookmarks: any BookmarkRepository
     public let readingPositions: any ReadingPositionRepository
+    public let sources: any LibrarySourceRepository
 
     public init(database: AppDatabase) {
         books = DatabaseBookRepository(database: database)
@@ -16,6 +17,7 @@ public struct DatabaseRepositories: Sendable {
         series = DatabaseSeriesRepository(database: database)
         bookmarks = DatabaseBookmarkRepository(database: database)
         readingPositions = DatabaseReadingPositionRepository(database: database)
+        sources = DatabaseLibrarySourceRepository(database: database)
     }
 }
 
@@ -247,6 +249,17 @@ public struct DatabaseSeriesRepository: SeriesRepository {
         }
     }
 
+    public func findOrCreateSeries(named name: String) async throws -> Series {
+        let name = try validatedName(name)
+        return try await database.writer.write { db in
+            // `name` is a NOCASE column, so this matches the unique index's idea of a duplicate.
+            if let existing = try Series.filter(Column("name") == name).fetchOne(db) { return existing }
+            let series = Series(name: name)
+            try series.insert(db)
+            return series
+        }
+    }
+
     public func renameSeries(id: Series.ID, to name: String) async throws {
         let name = try validatedName(name)
         try await mappingDuplicateName {
@@ -323,6 +336,87 @@ public struct DatabaseReadingPositionRepository: ReadingPositionRepository {
             try db.execute(
                 sql: "UPDATE book SET progression = ? WHERE id = ?",
                 arguments: [progression, position.bookId]
+            )
+        }
+    }
+}
+
+// MARK: - Library sources
+
+public struct DatabaseLibrarySourceRepository: LibrarySourceRepository {
+    let database: AppDatabase
+
+    public init(database: AppDatabase) {
+        self.database = database
+    }
+
+    public func observeSources() -> AsyncThrowingStream<[LibrarySource], any Error> {
+        database.observe { db in
+            let sources = try LibrarySource.fetchAll(db)
+            let order = SourceKind.allCases
+            return sources.sorted { (order.firstIndex(of: $0.kind) ?? 0) < (order.firstIndex(of: $1.kind) ?? 0) }
+        }
+    }
+
+    public func source(id: LibrarySource.ID) async throws -> LibrarySource? {
+        try await database.writer.read { db in try LibrarySource.fetchOne(db, key: id) }
+    }
+
+    public func source(kind: SourceKind) async throws -> LibrarySource? {
+        try await database.writer.read { db in
+            try LibrarySource.fetchOne(
+                db,
+                sql: "SELECT * FROM library_source WHERE kind = ?",
+                arguments: [kind.rawValue]
+            )
+        }
+    }
+
+    public func addSource(_ source: LibrarySource) async throws {
+        guard source.kind != .local else { throw RepositoryError.localIsNotASource }
+        do {
+            try await database.writer.write { db in try source.insert(db) }
+        } catch let error as DatabaseError where error.extendedResultCode == .SQLITE_CONSTRAINT_UNIQUE {
+            throw RepositoryError.sourceAlreadyLinked
+        }
+    }
+
+    public func changeRoot(
+        id: LibrarySource.ID,
+        rootId: String?,
+        rootBookmark: Data?,
+        rootDisplayPath: String
+    ) async throws {
+        try await database.writer.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE library_source
+                    SET rootId = ?, rootBookmark = ?, rootDisplayPath = ?, syncCursor = NULL
+                    WHERE id = ?
+                    """,
+                arguments: [rootId, rootBookmark, rootDisplayPath, id]
+            )
+        }
+    }
+
+    public func recordSyncSuccess(id: LibrarySource.ID, cursor: String?, at date: Date) async throws {
+        try await database.writer.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE library_source
+                    SET syncCursor = ?, status = 'ok', lastSyncedAt = ?, lastSyncError = NULL
+                    WHERE id = ?
+                    """,
+                arguments: [cursor, date, id]
+            )
+        }
+    }
+
+    public func recordSyncFailure(id: LibrarySource.ID, status: SourceStatus, message: String?) async throws {
+        try await database.writer.write { db in
+            try db.execute(
+                sql: "UPDATE library_source SET status = ?, lastSyncError = ? WHERE id = ?",
+                arguments: [status.rawValue, message, id]
             )
         }
     }

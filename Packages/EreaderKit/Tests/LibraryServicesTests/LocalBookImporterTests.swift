@@ -22,7 +22,7 @@ struct LocalBookImporterTests {
             caches: root.appendingPathComponent("Caches", isDirectory: true)
         )
         repositories = DatabaseRepositories(database: try AppDatabase.inMemory())
-        importer = LocalBookImporter(books: repositories.books, files: files)
+        importer = LocalBookImporter(books: repositories.books, series: repositories.series, files: files)
     }
 
     private func cleanUp() {
@@ -108,7 +108,126 @@ struct LocalBookImporterTests {
         #expect(!exists(files.url(forBookPath: "Books/local/B2.epub")))
     }
 
+    // MARK: Series
+
+    @Test("The EPUB's series is saved, reusing a series of the same name")
+    func savesSeries() async throws {
+        defer { cleanUp() }
+        let existing = try await repositories.series.createSeries(named: "earthsea")
+        let source = try await writeEPUB(named: "Tombs.epub", package: Self.package(identifier: "tombs", series: 2))
+
+        let book = try await importer.importBook(from: source)
+        let membership = try #require(try await repositories.series.series(containing: book.id))
+        #expect(membership.series.id == existing.id, "names match ignoring case")
+        #expect(membership.position == 2)
+    }
+
+    @Test("A replaced book keeps the series the user chose")
+    func keepsChosenSeries() async throws {
+        defer { cleanUp() }
+        let source = try await writeEPUB(named: "Tombs.epub", package: Self.package(identifier: "tombs", series: 2))
+        let book = try await importer.importBook(from: source, bookId: "B1")
+        let chosen = try await repositories.series.createSeries(named: "Favourites")
+        try await repositories.series.setSeries(chosen.id, position: nil, forBook: "B1")
+
+        _ = try await importer.importBook(from: source, duplicates: .replace(book.id))
+        #expect(try await repositories.series.series(containing: "B1")?.series.id == chosen.id)
+    }
+
+    // MARK: Duplicates
+
+    @Test("A second import of the same identifier asks, and leaves nothing behind")
+    func duplicateByIdentifier() async throws {
+        defer { cleanUp() }
+        let first = try await writeEPUB(named: "One.epub", package: Self.package(identifier: "urn:isbn:1"))
+        let second = try await writeEPUB(named: "Two.epub", package: Self.package(identifier: "urn:isbn:1"))
+        _ = try await importer.importBook(from: first, bookId: "B1")
+
+        await #expect(throws: BookImportError.duplicate(existingId: "B1", title: "The Tombs of Atuan")) {
+            _ = try await importer.importBook(from: second, bookId: "B2")
+        }
+        #expect(try await repositories.books.fetchLibrary(LibraryQuery()).map(\.id) == ["B1"])
+        #expect(!exists(files.url(forBookPath: "Books/local/B2.epub")))
+    }
+
+    @Test("Without an identifier, the same bytes are a duplicate and different bytes aren't")
+    func duplicateByContent() async throws {
+        defer { cleanUp() }
+        let original = try await writeEPUB(named: "One.epub", package: Self.package(identifier: nil))
+        let copy = root.appendingPathComponent("Copy.epub")
+        try FileManager.default.copyItem(at: original, to: copy)
+        let other = try await writeEPUB(named: "Other.epub", package: Self.package(identifier: nil, title: "Tehanu"))
+        _ = try await importer.importBook(from: original, bookId: "B1")
+
+        await #expect(throws: BookImportError.duplicate(existingId: "B1", title: "The Tombs of Atuan")) {
+            _ = try await importer.importBook(from: copy)
+        }
+        _ = try await importer.importBook(from: other, bookId: "B3")
+        #expect(try await repositories.books.fetchLibrary(LibraryQuery()).count == 2)
+    }
+
+    @Test("Keep Both imports a second book")
+    func keepBoth() async throws {
+        defer { cleanUp() }
+        let source = try await writeEPUB(named: "One.epub", package: Self.package(identifier: "urn:isbn:1"))
+        _ = try await importer.importBook(from: source, bookId: "B1")
+        _ = try await importer.importBook(from: source, bookId: "B2", duplicates: .keepBoth)
+        #expect(try await repositories.books.fetchLibrary(LibraryQuery()).count == 2)
+    }
+
+    @Test("Replace updates the book in place, keeping its id, reading state, and edited fields")
+    func replace() async throws {
+        defer { cleanUp() }
+        let old = try await writeEPUB(named: "Old.epub", package: Self.package(identifier: "urn:isbn:1"))
+        let new = try await writeEPUB(
+            named: "New.epub",
+            package: Self.package(identifier: "urn:isbn:1", title: "The Tombs of Atuan (Revised)", publisher: "Saga")
+        )
+        var book = try await importer.importBook(from: old, bookId: "B1")
+        book.title = "My Tombs"
+        book.isUserEdited = true
+        book.userEditedFields = [.title]
+        book.progression = 0.4
+        try await repositories.books.save(book)
+
+        let replaced = try await importer.importBook(from: new, bookId: "B2", duplicates: .replace("B1"))
+        #expect(replaced.id == "B1")
+        let stored = try #require(try await repositories.books.book(id: "B1"))
+        #expect(stored.title == "My Tombs", "the user's title wins")
+        #expect(stored.publisher == "Saga", "other fields come from the new file")
+        #expect(stored.progression == 0.4)
+        #expect(stored.localFilePath == "Books/local/B2.epub")
+        #expect(try await repositories.books.fetchLibrary(LibraryQuery()).count == 1)
+        #expect(!exists(files.url(forBookPath: "Books/local/B1.epub")), "the old file is removed")
+        #expect(exists(files.url(forBookPath: "Books/local/B2.epub")))
+    }
+
     // MARK: Fixtures
+
+    /// An EPUB 3 package for "The Tombs of Atuan" by one author, optionally in the Earthsea series.
+    private static func package(
+        identifier: String?,
+        title: String = "The Tombs of Atuan",
+        publisher: String? = nil,
+        series: Int? = nil
+    ) -> String {
+        let identifierElement = identifier.map { #"<dc:identifier id="uid">\#($0)</dc:identifier>"# } ?? ""
+        let publisherElement = publisher.map { "<dc:publisher>\($0)</dc:publisher>" } ?? ""
+        let seriesName = series == nil ? "" : #"<meta name="calibre:series" content="Earthsea"/>"#
+        let seriesIndex = series.map { #"<meta name="calibre:series_index" content="\#($0)"/>"# } ?? ""
+        return """
+            <?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                \(identifierElement)
+                <dc:title>\(title)</dc:title>
+                <dc:creator>Ursula K. Le Guin</dc:creator>
+                \(publisherElement)
+                \(seriesName)\(seriesIndex)
+              </metadata>
+            </package>
+            """
+    }
 
     private func writeEPUB(named name: String, package: String, extra: [(String, Data)] = []) async throws -> URL {
         let container = """

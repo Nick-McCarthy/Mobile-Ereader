@@ -37,3 +37,12 @@ public enum LibrarySortOrder: String, CaseIterable, Codable, Sendable {
     /// Downloaded books first.
     case downloadState
 }
+
+/// Health of a linked source. Stored in `library_source.status`.
+public enum SourceStatus: String, CaseIterable, Codable, Sendable {
+    case ok
+    /// Credentials or folder access were lost; the user must link again.
+    case needsRelink
+    /// The last sync failed for another reason; see `lastSyncError`.
+    case error
+}

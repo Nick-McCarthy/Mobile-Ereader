@@ -21,6 +21,7 @@ struct LibraryView: View {
                         "No Books Yet",
                         systemImage: "books.vertical",
                         description: Text("Import an EPUB or connect iCloud Drive, Dropbox, or OneDrive in Settings.")
+                            .foregroundStyle(.secondaryText)
                     )
                 } else {
                     List(books) { book in
@@ -28,11 +29,23 @@ struct LibraryView: View {
                     }
                 }
             }
+            // On the content rather than the stack, so it doesn't share a view with the error alert.
+            .alert(
+                "Already in Your Library",
+                isPresented: Binding(get: { !importController.duplicates.isEmpty }, set: { _ in }),
+                presenting: importController.duplicates.first
+            ) { _ in
+                Button("Replace") { importController.resolveFirstDuplicate(.replace) }
+                Button("Keep Both") { importController.resolveFirstDuplicate(.keepBoth) }
+                Button("Skip", role: .cancel) { importController.resolveFirstDuplicate(.skip) }
+            } message: { duplicate in
+                Text("“\(duplicate.title)” is already in your library. Replace it, or keep both?")
+            }
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     if importController.isImporting {
-                        ProgressView()
+                        ProgressView().accessibilityLabel("Importing Books")
                     } else {
                         Button("Import Books", systemImage: "plus") { showingImporter = true }
                     }
@@ -92,20 +105,33 @@ private struct BookRow: View {
                 Text(book.title).font(.headline).lineLimit(2)
                 Text(AuthorNameFormatter.string(for: book.authorName, in: authorFormat))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .foregroundStyle(.secondaryText)
             }
         }
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder private var cover: some View {
-        if let path = book.coverPath, let files,
-            let image = UIImage(contentsOfFile: files.url(forCoverPath: path).path(percentEncoded: false))
-        {
-            Image(uiImage: image).resizable().scaledToFill()
-        } else {
-            Rectangle().fill(.quaternary).overlay(Image(systemName: "book.closed").foregroundStyle(.secondary))
+    @State private var loadedCover: UIImage?
+
+    private var coverURL: URL? {
+        guard let path = book.coverPath, let files else { return nil }
+        return files.url(forCoverPath: path)
+    }
+
+    /// Decorative: the row's text already names the book, so VoiceOver skips it.
+    private var cover: some View {
+        Group {
+            if let image = loadedCover ?? coverURL.flatMap(CoverImageCache.shared.cachedImage(at:)) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Rectangle().fill(.quaternary).overlay(Image(systemName: "book.closed").foregroundStyle(.secondary))
+            }
+        }
+        .accessibilityHidden(true)
+        .task(id: coverURL) {
+            loadedCover = nil
+            guard let coverURL else { return }
+            loadedCover = await CoverImageCache.shared.image(at: coverURL)
         }
     }
 }

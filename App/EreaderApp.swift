@@ -25,6 +25,7 @@ struct EreaderApp: App {
                     .onOpenURL { url in
                         Task { await importController.importBooks([url]) }
                     }
+                    .task { await environment.prepareAtLaunch() }
             } else {
                 ContentUnavailableView(
                     "Can't Open Library",
