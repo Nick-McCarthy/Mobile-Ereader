@@ -90,11 +90,12 @@ From [`audit-stage-1-findings.md`](audit-stage-1-findings.md). High before P2.5;
   *Status:* done. *Sort* menu with key and direction in `@AppStorage`, driving `LibraryQuery`. Details in [`UI_SPEC.md`](UI_SPEC.md#library) (as implemented, P3.2).
 - [x] **P3.3 Search bar** — FTS5-backed, debounced, both author orders.
   *Status:* done. `.searchable` with a 150 ms debounce into `LibraryQuery.searchText`, and a "No Results" screen. Details in [`UI_SPEC.md`](UI_SPEC.md#library) (as implemented, P3.3).
-- [ ] **P3.4 Collections view mode** — grouped accordion inside the library (shares component with P4.1).
+- [x] **P3.4 Collections view mode** — grouped accordion inside the library (shares component with P4.1).
+  *Status:* done. *Collections* in the *View* menu groups the library's results by collection in collapsible sections (`CollapsibleBookSection`, reused by P4.1), then *Not in a Collection*. Details in [`UI_SPEC.md`](UI_SPEC.md#library) (as implemented, P3.4).
 - [ ] **P3.5 Tap behaviour** — open if downloaded, otherwise download then open.
 - [ ] **P3.6 Long-press menu** — Edit Details sheet (incl. author stored format & custom cover), Add to Collection, Add to Series, Download/Remove Download, Remove from Library.
 - [ ] **P3.7 Empty states & accessibility pass** (Dynamic Type, VoiceOver, dark mode).
-  *Known issue:* the accessibility audit sometimes reports the captions of a grid cell in the second row as "Dynamic Type font sizes are partially unsupported" (seen in P3.1 and P3.2 runs, depending on which book is there). Most likely `LazyVGrid` unloads cells that larger type pushes off screen, so the audit can't measure them. `AccessibilityAuditTests.testLibraryGridPassesAudit` passes with the seeded order; `LibrarySortTests` audits the list instead. Find a fix that keeps the grid lazy for large libraries.
+  *Known issue:* the accessibility audit sometimes reports the captions of a grid cell in the second row as "Dynamic Type font sizes are partially unsupported" (seen in P3.1 and P3.2 runs, depending on which book is there). Most likely `LazyVGrid` unloads cells that larger type pushes off screen, so the audit can't measure them. `AccessibilityAuditTests.testLibraryGridPassesAudit` passes with the seeded order; `LibrarySortTests` audits the list instead. Find a fix that keeps the grid lazy for large libraries. The same report hit the lowest section header in the collections view (P3.4), so it looks like the audit flags text near the bottom of any scrolling screen that larger type would push off it.
   *Phase done when:* every library item in the concept works end-to-end against the local DB and at least one linked source of each kind.
 
 ## Phase 4 — Collections, series & settings

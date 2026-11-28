@@ -6,7 +6,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Library tab: the grid or list of books (P3.1), sorted (P3.2) and searched (P3.3), Files import (P1.5), and
-/// pull to refresh (P2.8). The collections view and tapping a book arrive with the rest of Phase 3
+/// pull to refresh (P2.8), with a collections view (P3.4). Tapping a book arrives with the rest of Phase 3
 /// (docs/UI_SPEC.md#library).
 struct LibraryView: View {
     @Environment(\.appEnvironment) private var environment
@@ -59,6 +59,14 @@ struct LibraryView: View {
                         .refreshable { await sync.sync() }
                     case .list:
                         LibraryListView(
+                            books: books,
+                            downloadProgress: downloadProgress,
+                            authorFormat: authorFormat,
+                            files: environment?.files
+                        )
+                        .refreshable { await sync.sync() }
+                    case .collections:
+                        LibraryCollectionsView(
                             books: books,
                             downloadProgress: downloadProgress,
                             authorFormat: authorFormat,

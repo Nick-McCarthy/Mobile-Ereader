@@ -106,7 +106,7 @@ Feature code reads and writes through the protocols in `Persistence/Repositories
 | Protocol | Covers |
 |---|---|
 | `BookRepository` | Library list (`LibraryQuery`: sort, direction, search), get/save/delete one book, `markOpened` |
-| `CollectionRepository` | Collections in user order, books in a collection, create/rename/delete/reorder, add/remove books |
+| `CollectionRepository` | Collections in user order, books in a collection, memberships for the library's collections view (`observeMemberships`), create/rename/delete/reorder, add/remove books |
 | `SeriesRepository` | Series by name, entries (numbered first, then by title), a book's series, create/rename/delete, `findOrCreateSeries` (ignoring case), `setSeries` (one series per book) |
 | `BookmarkRepository` | A book's bookmarks in reading order, add/delete |
 | `ReadingPositionRepository` | Get/save the last position; saving also updates `book.progression` in the same transaction |

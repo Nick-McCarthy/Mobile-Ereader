@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// How the library lays out its books, chosen from the *View* menu and kept in `@AppStorage`.
-/// The collections mode arrives with P3.4. See docs/UI_SPEC.md#library.
+/// See docs/UI_SPEC.md#library.
 enum LibraryViewMode: String, CaseIterable, Identifiable {
     case grid
     case list
+    case collections
 
     static let storageKey = "libraryViewMode"
 
@@ -14,6 +15,7 @@ enum LibraryViewMode: String, CaseIterable, Identifiable {
         switch self {
         case .grid: "Grid"
         case .list: "List"
+        case .collections: "Collections"
         }
     }
 
@@ -21,6 +23,7 @@ enum LibraryViewMode: String, CaseIterable, Identifiable {
         switch self {
         case .grid: "square.grid.2x2"
         case .list: "list.bullet"
+        case .collections: "rectangle.stack"
         }
     }
 }
