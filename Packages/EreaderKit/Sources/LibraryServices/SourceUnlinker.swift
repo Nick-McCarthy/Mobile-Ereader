@@ -67,6 +67,8 @@ public struct SourceUnlinker: Sendable {
         for book in changes.removed {
             if let cover = book.coverPath { try? files.removeCover(atPath: cover) }
         }
+        // The source is already gone, so a failure here can't undo the unlink. `DetachedBookCheck.run` puts
+        // every detached file back into backups at each launch, which repairs any file missed here.
         for book in changes.detached {
             if let path = book.localFilePath { try? files.setExcludedFromBackup(false, bookPath: path) }
         }
@@ -76,6 +78,7 @@ public struct SourceUnlinker: Sendable {
 
 /// Removes detached books whose file is gone or unreadable (REMOTE_SOURCES rule 4). A detached book can't be
 /// downloaded again, so without its file it's nothing but an empty row. Run at launch, and when opening a book.
+/// At launch it also includes every kept detached file in backups again (rule 3), in case unlinking couldn't.
 public struct DetachedBookCheck: Sendable {
     let books: any BookRepository
     let files: BookFileStore
@@ -85,14 +88,20 @@ public struct DetachedBookCheck: Sendable {
         self.files = files
     }
 
-    /// Checks every detached book and returns how many were removed.
+    /// Checks every detached book and returns how many were removed. The ones kept are included in backups.
     @discardableResult
     @concurrent
     public func run() async throws -> Int {
         var removed = 0
-        for book in try await books.detachedBooks(kind: nil) where !hasReadableFile(book) {
-            try await remove(book)
-            removed += 1
+        for book in try await books.detachedBooks(kind: nil) {
+            if hasReadableFile(book) {
+                // Unlinking clears the flag too. Doing it at every launch repairs a file it missed. If this fails
+                // as well, the next launch tries again.
+                if let path = book.localFilePath { try? files.setExcludedFromBackup(false, bookPath: path) }
+            } else {
+                try await remove(book)
+                removed += 1
+            }
         }
         return removed
     }

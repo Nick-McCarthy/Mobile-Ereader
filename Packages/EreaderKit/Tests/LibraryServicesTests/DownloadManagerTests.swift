@@ -76,7 +76,7 @@ struct DownloadManagerTests {
         #expect(try await stored(book.id) == downloaded)
         let url = files.url(forBookPath: try #require(downloaded.localFilePath))
         #expect(try Data(contentsOf: url) == bytes)
-        #expect(try url.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+        #expect(try await backupExclusion(of: url, settlingOn: true) == true)
         #expect(!exists(try files.partialDownloadURL(bookId: book.id)))
         #expect(await !manager.isDownloading(book.id))
     }

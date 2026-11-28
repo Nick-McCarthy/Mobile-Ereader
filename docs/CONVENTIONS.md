@@ -18,6 +18,7 @@
 
 ## Testing
 - **Unit (Swift Testing):** `Core`, `EPUBMetadata`, `Persistence`, `RemoteSources` — run with `swift test --package-path Packages/EreaderKit` (CI does this before the UI tests).
+- **Backup flag in package tests:** on macOS, `isExcludedFromBackup` settles after a delay, so a read straight after a write can return the previous value. Assert it through `backupExclusion(of:settlingOn:)` in `LibraryServicesTests`, never a single `resourceValues` read (A1.11).
 - **Fixtures:** `Packages/EPUBMetadata/Tests/Fixtures/` — small public-domain or hand-made EPUBs covering EPUB 2, EPUB 3, missing metadata, odd covers, malformed zips. Never commit copyrighted books.
 - **UI (XCUITest):** library sort/view switching, long-press menu, reader chrome toggle vs. swipe, bookmarks, progress drag. Launch with `-UITestMode` to use an in-memory DB seeded with fixtures and a `FakeRemoteSource` for each provider.
 - A task is not done until **CI is green** on its branch: zero warnings, all tests pass. There's no local Mac, so CI's result is the only valid evidence. The CI invocation is roughly:
