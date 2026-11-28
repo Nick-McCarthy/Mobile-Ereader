@@ -6,8 +6,8 @@ import SwiftUI
 
 /// A collapsible `List` section of books: a first row with the name, the book count, and a chevron that toggles
 /// the section, and when expanded a horizontal row of covers. The toggle is a row rather than the section header,
-/// because the list dims header text below the contrast the accessibility audit asks for. Shared by the library's collections view (P3.4) and the
-/// Collections tab (P4.1). See docs/UI_SPEC.md#collections-tab.
+/// because the list dims header text below the contrast the accessibility audit asks for. Shared by the library's
+/// collections view (P3.4) and the Collections tab (P4.1). See docs/UI_SPEC.md#collections-tab.
 struct CollapsibleBookSection: View {
     let title: String
     let books: [Book]
