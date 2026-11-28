@@ -65,13 +65,15 @@ private struct SectionHeaderButton: View {
     }
 }
 
-/// Covers in a horizontal row, each with its download badge. VoiceOver reads each cover as its book.
+/// Covers in a horizontal row, each with its download badge; tapping one opens or downloads it. VoiceOver reads
+/// each cover as its book.
 private struct CoverRow: View {
     let books: [Book]
     let downloadProgress: [Book.ID: Double]
     let authorFormat: AuthorDisplayFormat
     let files: BookFileStore?
     @ScaledMetric(relativeTo: .body) private var coverWidth = 84
+    @Environment(\.openBook) private var openBook
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -79,13 +81,20 @@ private struct CoverRow: View {
                 ForEach(books) { book in
                     let status = book.fileStatus(downloadProgress: downloadProgress[book.id])
                     let accessibility = BookAccessibility(book: book, status: status, authorFormat: authorFormat)
-                    BookCover(book: book, authorFormat: authorFormat, files: files)
-                        .overlay(alignment: .topTrailing) { BookFileStatusBadge(status: status) }
-                        .frame(width: coverWidth)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(accessibility.label)
-                        .accessibilityValue(accessibility.value)
-                        .accessibilityIdentifier("library-book")
+                    Button {
+                        openBook(book)
+                    } label: {
+                        BookCover(book: book, authorFormat: authorFormat, files: files)
+                            .overlay(alignment: .topTrailing) { BookFileStatusBadge(status: status) }
+                            .frame(width: coverWidth)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(accessibility.label)
+                    .accessibilityValue(accessibility.value)
+                    .accessibilityHint(accessibility.hint)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityIdentifier("library-book")
                 }
             }
             .padding(.horizontal)

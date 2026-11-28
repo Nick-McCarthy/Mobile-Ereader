@@ -37,6 +37,15 @@ struct BookAccessibility {
         }
         return parts.joined(separator: ", ")
     }
+
+    /// What a tap does.
+    var hint: String {
+        switch status {
+        case .downloaded: String(localized: "Opens the book.")
+        case .downloading: String(localized: "Cancels the download.")
+        case .notDownloaded, .failed, .missingFromSource: String(localized: "Downloads and opens the book.")
+        }
+    }
 }
 
 /// The download state as a small glyph: nothing for a downloaded book, a cloud when it isn't downloaded, a ring

@@ -6,8 +6,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Library tab: the grid or list of books (P3.1), sorted (P3.2) and searched (P3.3), Files import (P1.5), and
-/// pull to refresh (P2.8), with a collections view (P3.4). Tapping a book arrives with the rest of Phase 3
-/// (docs/UI_SPEC.md#library).
+/// pull to refresh (P2.8), with a collections view (P3.4). Tapping a book opens it, downloading it first (P3.5).
+/// See docs/UI_SPEC.md#library.
 struct LibraryView: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(BookImportController.self) private var importController
@@ -25,6 +25,9 @@ struct LibraryView: View {
     @State private var searchQuery = ""
     /// Whether the whole library is empty, from the last unfiltered results; kept while a search is active.
     @State private var libraryIsEmpty = true
+    /// The book open in the reader (a placeholder until Phase 5), and the last tap that couldn't open one.
+    @State private var reading: Book?
+    @State private var openFailure: OpenFailure?
 
     var body: some View {
         NavigationStack {
@@ -95,6 +98,17 @@ struct LibraryView: View {
                 Text("“\(duplicate.title)” is already in your library. Replace it, or keep both?")
             }
             .navigationTitle("Library")
+            .environment(\.openBook, OpenBookAction { book in Task { await open(book) } })
+            .fullScreenCover(item: $reading) { book in ReaderPlaceholderView(book: book) }
+            .alert(
+                openFailure?.alertTitle ?? "",
+                isPresented: Binding(get: { openFailure != nil }, set: { if !$0 { openFailure = nil } }),
+                presenting: openFailure
+            ) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { failure in
+                Text(failure.message)
+            }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     LibraryViewModeMenu(mode: $viewMode)
@@ -151,6 +165,16 @@ struct LibraryView: View {
 extension LibraryView {
     fileprivate var query: LibraryQuery {
         LibraryQuery(sort: sort, reversed: sortReversed, searchText: searchQuery)
+    }
+
+    /// Opens the tapped book, downloading it first if needed; a tap on a downloading book cancels it (P3.5).
+    fileprivate func open(_ book: Book) async {
+        guard let environment else { return }
+        switch await environment.opener.tap(book.id) {
+        case .open(let opened): reading = opened
+        case .cancelled: break
+        case .failed(let reason): openFailure = OpenFailure(title: book.title, reason: reason)
+        }
     }
 
     /// Passes the typed text to the query once typing pauses for 150 ms; clearing the field applies at once.

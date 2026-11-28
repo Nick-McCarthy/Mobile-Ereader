@@ -37,6 +37,17 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
 - **Empty state:** explains how to add books, with buttons for *Connect iCloud Drive*, *Connect Dropbox*, *Connect OneDrive*, and *Import a File*.
 - **Source indicator:** a small source glyph (iCloud / Dropbox / OneDrive / device) in list rows and the Edit Details sheet. Detached books show the glyph crossed out, with "Not linked" in Edit Details. *Missing from source* books show a subtle badge.
 - **Sync banner:** slim progress banner at top while a sync is running.
+- **As implemented (P3.5):**
+  - Each grid cell, list row, and collection cover is a button that calls the `openBook` environment action. `LibraryView` passes the tap to `BookOpener` (LibraryServices):
+    - A downloaded book with its file on the device opens at once.
+    - A book that isn't downloaded is downloaded through `DownloadManager`, with its progress badge, then opens.
+    - Tapping a book that is downloading cancels the download.
+    - A downloaded copy that changed in its source (`isDownloadStale`) is downloaded again first, but opens as it is if that fails, so it still reads offline.
+    - Opening sets `lastOpenedAt`, which moves the book to the front of Recently Viewed.
+  - The reader is `ReaderPlaceholderView` (a full-screen cover with the title and *Close*) until P5.1.
+  - A failed tap shows an alert named for `BookOpenError`: *You're Offline* (URL errors such as no connection or timeout), *Link the Folder Again*, *Book Not Found* (missing from the source), *Book Changed* (size mismatch: sync and retry), *Can't Download* (no adapter for the source in this version), *Book File Missing* (a local or detached book whose file is gone), *Download Failed*.
+  - VoiceOver: each book has the button trait and a hint: "Opens the book.", "Downloads and opens the book.", or "Cancels the download."
+  - Tests: `BookOpenerTests` (open, download then open, tap again cancels, failures, missing local file, stale copy online and offline, error mapping). UI test `LibraryOpenTests`: opening the seeded downloaded book (which has a stand-in file), Recently Viewed order after it, and the alert for a book with no file.
 - **As implemented (P3.4):**
   - *Collections* is the third choice in the *View* menu (`LibraryViewMode.collections`). `LibraryCollectionsView` is an inset-grouped `List` of `CollapsibleBookSection`s (`App/Features/Collections/`, shared with the Collections tab in P4.1): one per collection in the user's order, then *Not in a Collection*. A book in several collections shows in each.
   - The books are the library's current results, so the sort order and search apply inside each section. `LibrarySection.byCollection` (Persistence) does the grouping and leaves out sections with no books (empty collections, or none matching the search). The memberships come from `CollectionRepository.observeMemberships()`.

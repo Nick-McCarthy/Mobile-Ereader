@@ -30,6 +30,7 @@ private struct LibraryListRow: View {
     let authorFormat: AuthorDisplayFormat
     let files: BookFileStore?
     @ScaledMetric(relativeTo: .body) private var coverWidth = 44
+    @Environment(\.openBook) private var openBook
 
     /// "1971 · 42%", leaving out what the book doesn't have.
     private var details: String? {
@@ -39,6 +40,21 @@ private struct LibraryListRow: View {
 
     var body: some View {
         let accessibility = BookAccessibility(book: book, status: status, authorFormat: authorFormat)
+        Button {
+            openBook(book)
+        } label: {
+            content
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibility.label)
+        .accessibilityValue(accessibility.value)
+        .accessibilityHint(accessibility.hint)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("library-book")
+    }
+
+    private var content: some View {
         HStack(spacing: 12) {
             BookCover(book: book, authorFormat: authorFormat, files: files)
                 .frame(width: coverWidth)
@@ -57,9 +73,6 @@ private struct LibraryListRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             BookFileStatusGlyph(status: status)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibility.label)
-        .accessibilityValue(accessibility.value)
-        .accessibilityIdentifier("library-book")
+        .contentShape(Rectangle())
     }
 }
