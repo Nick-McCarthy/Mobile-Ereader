@@ -1,0 +1,56 @@
+import BookStorage
+import Core
+import Persistence
+import SwiftUI
+
+/// The library's grid: covers in adaptive columns (about 110 pt, wider with larger text), title and author
+/// under each, and a download badge on the cover. See docs/UI_SPEC.md#library.
+struct LibraryGridView: View {
+    let books: [Book]
+    let downloadProgress: [Book.ID: Double]
+    let authorFormat: AuthorDisplayFormat
+    let files: BookFileStore?
+    @ScaledMetric(relativeTo: .subheadline) private var columnWidth = 110
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: columnWidth), spacing: 16, alignment: .top)], spacing: 20) {
+                ForEach(books) { book in
+                    LibraryGridCell(
+                        book: book,
+                        status: book.fileStatus(downloadProgress: downloadProgress[book.id]),
+                        authorFormat: authorFormat,
+                        files: files
+                    )
+                }
+            }
+            .padding()
+        }
+    }
+}
+
+private struct LibraryGridCell: View {
+    let book: Book
+    let status: BookFileStatus
+    let authorFormat: AuthorDisplayFormat
+    let files: BookFileStore?
+
+    var body: some View {
+        let accessibility = BookAccessibility(book: book, status: status, authorFormat: authorFormat)
+        VStack(alignment: .leading, spacing: 4) {
+            BookCover(book: book, authorFormat: authorFormat, files: files)
+                .overlay(alignment: .topTrailing) { BookFileStatusBadge(status: status) }
+                .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+            Text(book.title)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(2)
+            Text(AuthorNameFormatter.string(for: book.authorName, in: authorFormat))
+                .font(.caption)
+                .foregroundStyle(.secondaryText)
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibility.label)
+        .accessibilityValue(accessibility.value)
+    }
+}

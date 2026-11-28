@@ -11,8 +11,8 @@ struct AppEnvironment: Sendable {
     let importer: LocalBookImporter
     /// Removes Keychain tokens left by an earlier install. Nil in UI tests, which never touch the Keychain.
     let tokenCleanup: OrphanedTokenCleanup?
-    /// UI tests only (`-UITestSeedBook`): a book to show, so audits see a non-empty library.
-    let uiTestSeedBook: Book?
+    /// UI tests only (`-UITestSeedBooks`): books in each download state, so audits see a non-empty library.
+    let uiTestSeedBooks: [Book]
     /// Removes detached books whose file is gone (docs/REMOTE_SOURCES.md#unlinking--detached-books).
     let detachedBookCheck: DetachedBookCheck
     let bookSources: BookSources
@@ -26,7 +26,7 @@ struct AppEnvironment: Sendable {
         database: AppDatabase,
         files: BookFileStore,
         usesKeychain: Bool = true,
-        uiTestSeedBook: Book? = nil,
+        uiTestSeedBooks: [Book] = [],
         uiTestLinkedFolder: URL? = nil
     ) {
         self.repositories = DatabaseRepositories(database: database)
@@ -35,7 +35,7 @@ struct AppEnvironment: Sendable {
         let sources = repositories.sources
         let stores = usesKeychain ? OrphanedTokenCleanup.keychainStores() : nil
         self.tokenCleanup = stores.map { OrphanedTokenCleanup(sources: sources, stores: $0) }
-        self.uiTestSeedBook = uiTestSeedBook
+        self.uiTestSeedBooks = uiTestSeedBooks
         self.detachedBookCheck = DetachedBookCheck(books: repositories.books, files: files)
         self.bookSources = BookSources(sources: sources)
         self.syncEngine = SyncEngine(
@@ -50,21 +50,42 @@ struct AppEnvironment: Sendable {
         self.uiTestLinkedFolder = uiTestLinkedFolder
     }
 
-    /// One-off work at launch: seeds the UI-test book, removes Keychain tokens left by an earlier install
-    /// (finding F-A1), and removes detached books whose file is gone.
+    /// One-off work at launch: removes Keychain tokens left by an earlier install (finding F-A1), removes
+    /// detached books whose file is gone, and seeds the UI-test books (after that check, which would remove them).
     func prepareAtLaunch() async {
-        if let uiTestSeedBook { try? await repositories.books.save(uiTestSeedBook) }
         if let uiTestLinkedFolder { _ = try? await bookSources.linkFolder(at: uiTestLinkedFolder) }
         _ = try? await tokenCleanup?.run()
         _ = try? await detachedBookCheck.run()
+        for book in uiTestSeedBooks { try? await repositories.books.save(book) }
     }
 
-    private static let uiTestBook = Book(
-        id: "uitest-book",
-        sourceKind: .local,
-        title: "The Tombs of Atuan",
-        authorRaw: "Ursula K. Le Guin"
-    )
+    /// A downloaded book part-read, a placeholder book not downloaded, one whose download failed, and one missing
+    /// from its folder. Remote books have no source, so they count as detached; that doesn't change how they show.
+    private static var uiTestBooks: [Book] {
+        var tombs = Book(
+            id: "uitest-book",
+            sourceKind: .local,
+            title: "The Tombs of Atuan",
+            authorRaw: "Ursula K. Le Guin"
+        )
+        tombs.downloadState = .downloaded
+        tombs.progression = 0.42
+        tombs.publicationDate = "1971"
+        tombs.publicationDateSort = 1971_0000
+        var placeholder = Book(id: "uitest-placeholder", sourceKind: .iCloud, title: nil, authorRaw: nil)
+        placeholder.downloadState = .notDownloaded
+        var failed = Book(
+            id: "uitest-failed",
+            sourceKind: .iCloud,
+            title: "The Left Hand of Darkness",
+            authorRaw: "Le Guin, Ursula K."
+        )
+        failed.downloadState = .failed
+        var missing = Book(id: "uitest-missing", sourceKind: .iCloud, title: "Anathem", authorRaw: "Neal Stephenson")
+        missing.downloadState = .notDownloaded
+        missing.isMissingFromSource = true
+        return [tombs, placeholder, failed, missing]
+    }
 
     /// The on-device database and folders. UI tests (`-UITestMode`) get an empty in-memory library instead,
     /// so runs don't depend on each other.
@@ -76,7 +97,9 @@ struct AppEnvironment: Sendable {
                 applicationSupport: root.appendingPathComponent("Support", isDirectory: true),
                 caches: root.appendingPathComponent("Caches", isDirectory: true)
             )
-            let seed = arguments.contains("-UITestSeedBook") ? uiTestBook : nil
+            let seed = arguments.contains("-UITestSeedBooks") ? uiTestBooks : []
+            // Each run starts in the default view mode, whatever an earlier test chose.
+            UserDefaults.standard.removeObject(forKey: LibraryViewMode.storageKey)
             var folder: URL?
             if arguments.contains("-UITestLinkedFolder") {
                 let books = root.appendingPathComponent("UITest Books", isDirectory: true)
@@ -87,7 +110,7 @@ struct AppEnvironment: Sendable {
                 database: try AppDatabase.inMemory(),
                 files: files,
                 usesKeychain: false,
-                uiTestSeedBook: seed,
+                uiTestSeedBooks: seed,
                 uiTestLinkedFolder: folder
             )
         }

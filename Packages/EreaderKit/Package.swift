@@ -48,7 +48,7 @@ let package = Package(
         .testTarget(name: "CoreTests", dependencies: ["Core"], swiftSettings: strict),
         .testTarget(
             name: "PersistenceTests",
-            dependencies: ["Persistence", .product(name: "GRDB", package: "GRDB.swift")],
+            dependencies: ["Core", "Persistence", .product(name: "GRDB", package: "GRDB.swift")],
             swiftSettings: strict
         ),
         .testTarget(
