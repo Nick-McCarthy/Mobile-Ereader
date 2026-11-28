@@ -39,6 +39,8 @@ public struct Book: Codable, Equatable, Identifiable, Sendable, FetchableRecord,
 
     // Local state
     public var localFilePath: String?
+    /// The `remoteVersion` the downloaded file was fetched at. Nil for local imports and books not downloaded.
+    public var localFileVersion: String?
     public var downloadState: DownloadState
     public var isUserEdited: Bool
     public var userEditedFields: [EditableBookField]
@@ -107,6 +109,12 @@ public struct Book: Codable, Equatable, Identifiable, Sendable, FetchableRecord,
     public var authorName: AuthorName {
         let format: AuthorStoredFormat = authorIsPlaceholder ? .unknown : authorStoredFormat
         return AuthorName(raw: authorRaw, storedFormat: format, fileAs: authorFileAs)
+    }
+
+    /// True for a downloaded remote book whose file changed in its source since it was downloaded.
+    /// The reader re-downloads it on the next open.
+    public var isDownloadStale: Bool {
+        downloadState == .downloaded && localFileVersion != nil && localFileVersion != remoteVersion
     }
 
     /// True for a downloaded book whose source was unlinked. See docs/REMOTE_SOURCES.md#unlinking--detached-books.

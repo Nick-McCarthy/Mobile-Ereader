@@ -39,6 +39,52 @@ public protocol BookRepository: Sendable {
     func deleteBook(id: Book.ID) async throws
     /// Records that the book was opened, for the "Recently viewed" sort.
     func markOpened(id: Book.ID, at date: Date) async throws
+
+    // Sync (P2.7)
+
+    /// Every book of the linked source, missing ones included.
+    func books(inSource sourceId: LibrarySource.ID) async throws -> [Book]
+    /// Applies what one listing found, in a single transaction.
+    func applyListing(_ changes: BookListingChanges) async throws
+    /// Reads the book, changes it, and saves it in one transaction, so an edit made meanwhile isn't lost.
+    /// Returns the saved book, or nil if there is no book with that id.
+    @discardableResult
+    func updateBook(id: Book.ID, _ change: @escaping @Sendable (inout Book) -> Void) async throws -> Book?
+}
+
+/// What a sync listing changes in a source's books. Metadata is fetched afterwards, book by book.
+public struct BookListingChanges: Equatable, Sendable {
+    /// Books listed for the first time.
+    public var inserted: [Book]
+    /// Known books listed again: their path, size, and modified date are updated and they stop being missing.
+    public var relisted: [RelistedBook]
+    /// Books the source no longer has. They are kept, flagged `isMissingFromSource`.
+    public var missing: [Book.ID]
+
+    public init(inserted: [Book] = [], relisted: [RelistedBook] = [], missing: [Book.ID] = []) {
+        self.inserted = inserted
+        self.relisted = relisted
+        self.missing = missing
+    }
+
+    public var isEmpty: Bool {
+        inserted.isEmpty && relisted.isEmpty && missing.isEmpty
+    }
+}
+
+/// A known book seen again in a listing.
+public struct RelistedBook: Equatable, Sendable {
+    public var id: Book.ID
+    public var remotePath: String
+    public var fileSize: Int64?
+    public var remoteModifiedAt: Date?
+
+    public init(id: Book.ID, remotePath: String, fileSize: Int64?, remoteModifiedAt: Date?) {
+        self.id = id
+        self.remotePath = remotePath
+        self.fileSize = fileSize
+        self.remoteModifiedAt = remoteModifiedAt
+    }
 }
 
 public protocol CollectionRepository: Sendable {

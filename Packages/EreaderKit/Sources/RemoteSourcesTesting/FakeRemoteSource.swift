@@ -8,6 +8,8 @@ import RemoteSources
 /// Paths are absolute ("/Books/Earthsea.epub") and double as remote ids and folder ids.
 public actor FakeRemoteSource: RemoteSource {
     public nonisolated let kind: SourceKind
+    /// False makes `byteRangeReader(for:)` return nil, as the iCloud adapter does, so metadata needs a download.
+    public nonisolated let supportsRangedReads: Bool
 
     /// Upserts per page. Each page is fetched separately, so failures can land between pages.
     public private(set) var pageSize = 2
@@ -16,6 +18,7 @@ public actor FakeRemoteSource: RemoteSource {
     /// How many enumerations and downloads have started, for asserting retries.
     public private(set) var enumerationCount = 0
     public private(set) var rangeReadCount = 0
+    public private(set) var downloadCount = 0
 
     private struct Item {
         var file: RemoteFile
@@ -33,8 +36,13 @@ public actor FakeRemoteSource: RemoteSource {
     private var authExpired = false
     private var failAfterPages: Int?
 
-    public init(kind: SourceKind = .dropbox, accountLabel: String? = "reader@example.com") {
+    public init(
+        kind: SourceKind = .dropbox,
+        accountLabel: String? = "reader@example.com",
+        supportsRangedReads: Bool = true
+    ) {
         self.kind = kind
+        self.supportsRangedReads = supportsRangedReads
         self.accountLabel = accountLabel
     }
 
@@ -138,7 +146,7 @@ public actor FakeRemoteSource: RemoteSource {
     }
 
     public nonisolated func byteRangeReader(for file: RemoteFile) -> (any ByteRangeReading)? {
-        FakeByteRangeReader(source: self, remoteId: file.remoteId)
+        supportsRangedReads ? FakeByteRangeReader(source: self, remoteId: file.remoteId) : nil
     }
 
     public func download(
@@ -148,6 +156,7 @@ public actor FakeRemoteSource: RemoteSource {
     ) async throws {
         try checkAuth()
         guard let item = items[file.remoteId] else { throw RemoteSourceError.notFound }
+        downloadCount += 1
         progress(0)
         try item.data.write(to: destination)
         progress(1)

@@ -4,6 +4,16 @@ import GRDB
 enum Schema {
     static func registerMigrations(in migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1: library schema", migrate: createV1)
+        migrator.registerMigration("v2: downloaded file version", migrate: addLocalFileVersion)
+    }
+
+    // MARK: - v2
+
+    /// The `remoteVersion` a downloaded file was fetched at, so sync can tell when the copy is out of date.
+    private static func addLocalFileVersion(_ db: Database) throws {
+        try db.alter(table: "book") { t in
+            t.add(column: "localFileVersion", .text)
+        }
     }
 
     // MARK: - v1
