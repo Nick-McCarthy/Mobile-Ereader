@@ -4,8 +4,9 @@ import Foundation
 import Persistence
 import SwiftUI
 
-/// A collapsible `List` section of books: a header with the name, the book count, and a chevron that toggles
-/// it, and when expanded a horizontal row of covers. Shared by the library's collections view (P3.4) and the
+/// A collapsible `List` section of books: a first row with the name, the book count, and a chevron that toggles
+/// the section, and when expanded a horizontal row of covers. The toggle is a row rather than the section header,
+/// because the list dims header text below the contrast the accessibility audit asks for. Shared by the library's collections view (P3.4) and the
 /// Collections tab (P4.1). See docs/UI_SPEC.md#collections-tab.
 struct CollapsibleBookSection: View {
     let title: String
@@ -17,12 +18,11 @@ struct CollapsibleBookSection: View {
 
     var body: some View {
         Section {
+            SectionHeaderButton(title: title, count: books.count, isExpanded: $isExpanded)
             if isExpanded {
                 CoverRow(books: books, downloadProgress: downloadProgress, authorFormat: authorFormat, files: files)
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
             }
-        } header: {
-            SectionHeaderButton(title: title, count: books.count, isExpanded: $isExpanded)
         }
     }
 }
@@ -57,7 +57,6 @@ private struct SectionHeaderButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .textCase(nil)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title), \(countText)")
         .accessibilityValue(isExpanded ? String(localized: "Expanded") : String(localized: "Collapsed"))
