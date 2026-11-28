@@ -97,7 +97,7 @@ As implemented (P2.1, `RemoteSources/RemoteSource.swift`):
 
 #### As implemented (P2.4, `RemoteSources/Files`)
 - `FilesRemoteSource(bookmark:picker:)` is an actor.
-  - `link()` asks a `FolderPicking` for a folder. The app supplies the `UIDocumentPickerViewController` implementation with the Settings UI in P2.8.
+  - `link()` asks a `FolderPicking` for a folder. The app links through SwiftUI's `.fileImporter` instead (P2.8, below).
   - `link(folderAt:)` keeps a bookmark to the folder. The account label is the folder's name.
   - The caller saves `bookmark` to `library_source.rootBookmark` after `link`, after each sync (a stale bookmark is re-created in place), and after `unlink` (which only forgets it).
   - A missing bookmark, one that won't resolve, or a folder that's gone throws `needsRelink`.
@@ -113,6 +113,13 @@ As implemented (P2.1, `RemoteSources/RemoteSource.swift`):
   - If the file wasn't on the device before, it is evicted again afterwards.
   - Progress is reported only as 0 and 1.
 - Tests run against a temporary folder tree with placeholder names (`RemoteSourcesTests/FilesRemoteSourceTests`).
+
+### Linking in the app (P2.8, `LibraryServices/BookSources.swift`)
+- `BookSources.remote(for:)` builds the adapter for a linked source: `FilesRemoteSource(bookmark:)` for iCloud, nil for Dropbox and OneDrive until their adapters exist. `syncTargets(for:)` skips sources without an adapter, and `isAvailable(_:)` tells Settings which rows can be linked.
+- `linkFolder(at:)` takes the security-scoped folder URL from the system picker and saves an iCloud source: label = folder name, root id `""`, the bookmark, display path `/<name>`.
+- `changeFolder(of:to:)` saves a new bookmark and path (and clears the cursor). The same action re-links a folder after `needsRelink`.
+- `saveRefreshedBookmarks(_:)` runs after each sync and saves a bookmark the adapter re-created because the old one was stale (`LibrarySourceRepository.saveRootBookmark`).
+- The app links with SwiftUI's `.fileImporter` for `.folder` rather than the adapter's `FolderPicking` hook, which stays for callers without SwiftUI.
 
 ## Folder browser
 - Dropbox and OneDrive: an in-app browser with breadcrumbs, a *This Folder* button, and a *Whole Dropbox/OneDrive* shortcut. Persist the folder id and display path to `library_source`.
