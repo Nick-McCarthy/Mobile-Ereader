@@ -22,6 +22,13 @@ final class LibrarySortTests: XCTestCase {
 
         choose(app, "Z to A")
         expectOrder(app, ["The Tombs of Atuan", "The Left Hand of Darkness", "Anathem", "Unknown Title"])
+
+        // The list keeps the order. The audit runs here, not on the grid: the grid's lazy cells that larger type
+        // pushes off screen are reported as not supporting Dynamic Type (see the P3.7 note in the action plan).
+        app.navigationBars["Library"].buttons["View"].tap()
+        app.buttons["List"].tap()
+        XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 10))
+        expectOrder(app, ["The Tombs of Atuan", "The Left Hand of Darkness", "Anathem", "Unknown Title"])
         try auditAccessibility(app)
     }
 
