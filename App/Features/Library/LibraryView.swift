@@ -173,8 +173,8 @@ private struct LibrarySearch: ViewModifier {
 
     func body(content: Content) -> some View {
         if isEnabled {
-            // Always shown: added once the first book arrives, the default placement would start collapsed.
-            content.searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always))
+            // The default placement: it may start collapsed, and pulling the library down shows it.
+            content.searchable(text: $text)
         } else {
             content
         }

@@ -17,7 +17,11 @@ final class LibrarySearchTests: XCTestCase {
         library.tap()
         XCTAssertTrue(books(app).firstMatch.waitForExistence(timeout: 15))
 
+        // The field pulls down from the navigation bar; it starts collapsed when the books arrive after launch.
         let field = app.searchFields.firstMatch
+        if !field.waitForExistence(timeout: 3) {
+            books(app).firstMatch.swipeDown()
+        }
         XCTAssertTrue(field.waitForExistence(timeout: 10), "No search field")
         field.tap()
         // One book stores "Ursula K. Le Guin", the other "Le Guin, Ursula K."; both orders find both.
@@ -56,13 +60,15 @@ final class LibrarySearchTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        var shown: Set<String> = []
+        // Each check is its own query, so a list that changes mid-check fails that pass rather than the test.
         let deadline = Date().addingTimeInterval(10)
         repeat {
-            shown = Set(books(app).allElementsBoundByIndex.map { $0.label.components(separatedBy: ", ").first ?? "" })
-            if shown == titles { return }
+            let allShown = titles.allSatisfy { title in
+                books(app).matching(NSPredicate(format: "label BEGINSWITH %@", "\(title), ")).firstMatch.exists
+            }
+            if allShown, books(app).count == titles.count { return }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         } while Date() < deadline
-        XCTFail("Library shows \(shown.sorted()), expected \(titles.sorted())", file: file, line: line)
+        XCTFail("Library shows \(books(app).count) books, expected \(titles.sorted())", file: file, line: line)
     }
 }
