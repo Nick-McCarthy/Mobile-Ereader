@@ -174,13 +174,22 @@ public actor SyncEngine {
             }
             progress.found = listing.upserts.count
 
+            let detached = try await books.detachedBooks(kind: source.kind)
             let (changes, queue) = try await Self.diff(
                 listing,
                 against: books.books(inSource: source.id),
+                detached: detached,
                 source: source,
                 dateAdded: now()
             )
             try await books.applyListing(changes)
+            // A re-attached download can be fetched again, so it leaves device backups once more.
+            let detachedPaths = Dictionary(uniqueKeysWithValues: detached.map { ($0.id, $0.localFilePath) })
+            for book in changes.reattached {
+                if let path = detachedPaths[book.listing.id] ?? nil {
+                    try? files.setExcludedFromBackup(true, bookPath: path)
+                }
+            }
             progress.toProcess = queue.count
             progress.phase = .fetchingMetadata
             report(progress)
@@ -223,15 +232,24 @@ public actor SyncEngine {
     }
 
     /// What the listing changes in the source's books, and which of them need metadata.
+    ///
+    /// A listed file that matches a detached book of the same kind (by `remoteId`; for iCloud, whose ids are
+    /// paths, also by `remoteVersion`) re-attaches that book instead of adding a new one, so its bookmarks and
+    /// progress survive a re-link.
     static func diff(
         _ listing: Listing,
         against existing: [Book],
+        detached: [Book] = [],
         source: LibrarySource,
         dateAdded: Date
     ) -> (BookListingChanges, [MetadataJob]) {
         var byRemoteId: [String: Book] = [:]
         for book in existing {
             if let remoteId = book.remoteId { byRemoteId[remoteId] = book }
+        }
+        var detachedByRemoteId: [String: Book] = [:]
+        for book in detached where book.sourceKind == source.kind {
+            if let remoteId = book.remoteId { detachedByRemoteId[remoteId] = book }
         }
 
         var changes = BookListingChanges()
@@ -252,6 +270,19 @@ public actor SyncEngine {
                         )
                     )
                 }
+                if book.remoteVersion != file.version {
+                    queue.append(MetadataJob(bookId: book.id, file: file))
+                }
+            } else if let book = detachedByRemoteId.removeValue(forKey: file.remoteId),
+                source.kind != .iCloud || book.remoteVersion == file.version
+            {
+                let listing = RelistedBook(
+                    id: book.id,
+                    remotePath: file.displayPath,
+                    fileSize: file.size,
+                    remoteModifiedAt: file.modifiedAt
+                )
+                changes.reattached.append(ReattachedBook(sourceId: source.id, listing: listing))
                 if book.remoteVersion != file.version {
                     queue.append(MetadataJob(bookId: book.id, file: file))
                 }
