@@ -7,8 +7,8 @@ struct LibrarySortMenu: View {
     @Binding var sort: LibrarySortOrder
     @Binding var reversed: Bool
 
-    static let sortKey = "librarySort"
-    static let reversedKey = "librarySortReversed"
+    nonisolated static let sortKey = "librarySort"
+    nonisolated static let reversedKey = "librarySortReversed"
 
     var body: some View {
         Menu {
