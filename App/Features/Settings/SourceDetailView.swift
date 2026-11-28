@@ -73,18 +73,18 @@ struct SourceDetailView: View {
     @ViewBuilder
     private func details(_ source: LibrarySource) -> some View {
         Section {
-            LabeledContent("Folder", value: source.rootDisplayPath)
+            InfoRow(label: "Folder", value: source.rootDisplayPath)
             if let progress = sync.progress[source.id], let running = SyncStatusText.running(progress) {
-                LabeledContent("Sync", value: running)
+                InfoRow(label: "Sync", value: running)
             } else if let synced = source.lastSyncedAt {
-                LabeledContent("Last Synced", value: synced.formatted(.relative(presentation: .named)))
+                InfoRow(label: "Last Synced", value: synced.formatted(.relative(presentation: .named)))
             } else {
-                LabeledContent("Last Synced", value: String(localized: "Not yet"))
+                InfoRow(label: "Last Synced", value: String(localized: "Not yet"))
             }
             if let progress = sync.progress[source.id], case .finished = progress.phase {
-                LabeledContent("Books Found", value: progress.found, format: .number)
+                InfoRow(label: "Books Found", value: progress.found.formatted())
                 if progress.errors > 0 {
-                    LabeledContent("Couldn't Read", value: progress.errors, format: .number)
+                    InfoRow(label: "Couldn't Read", value: progress.errors.formatted())
                 }
             }
         } footer: {
@@ -106,6 +106,7 @@ struct SourceDetailView: View {
         Section {
             if sync.isSyncing {
                 Button("Cancel Sync", role: .destructive) { sync.cancel() }
+                    .foregroundStyle(.accessibleDestructive)
             } else {
                 Button("Sync This Source", systemImage: "arrow.triangle.2.circlepath") {
                     Task { await sync.sync(only: source.id) }
@@ -123,6 +124,7 @@ struct SourceDetailView: View {
             Button("Unlink…", systemImage: "link", role: .destructive) {
                 Task { await prepareUnlink() }
             }
+            .foregroundStyle(.accessibleDestructive)
             .disabled(sync.isSyncing)
         }
     }

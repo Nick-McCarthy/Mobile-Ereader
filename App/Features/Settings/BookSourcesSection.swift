@@ -49,9 +49,8 @@ struct BookSourcesSection: View {
                 row(for: kind)
             }
             syncButton
-        } header: {
-            Text("Book Sources")
-        } footer: {
+            // A row rather than the section footer: the audit reports footers as not fully scaling with
+            // Dynamic Type.
             Text(
                 """
                 Access is read-only: the app never changes your files, and nothing is sent anywhere except the \
@@ -59,6 +58,11 @@ struct BookSourcesSection: View {
                 such as Google Drive.
                 """
             )
+            .font(.footnote)
+            .foregroundStyle(.secondaryText)
+            .fixedSize(horizontal: false, vertical: true)
+        } header: {
+            Text("Book Sources").foregroundStyle(.secondaryText)
         }
         .fileImporter(isPresented: $pickingFolder, allowedContentTypes: [.folder]) { result in
             guard case .success(let url) = result else { return }
@@ -96,6 +100,7 @@ struct BookSourcesSection: View {
     private var syncButton: some View {
         if sync.isSyncing {
             Button("Cancel Sync", role: .destructive) { sync.cancel() }
+                .foregroundStyle(.accessibleDestructive)
         } else if sources.contains(where: { BookSources.isAvailable($0.kind) }) {
             // Hidden rather than disabled when nothing is linked: a disabled button's text fails the contrast audit.
             Button("Sync Now", systemImage: "arrow.triangle.2.circlepath") {

@@ -11,7 +11,7 @@ struct SettingsView: View {
             Form {
                 BookSourcesSection(sources: sources)
                 Section {
-                    LabeledContent("Version", value: Self.appVersion)
+                    InfoRow(label: "Version", value: Self.appVersion)
                 } header: {
                     Text("About").foregroundStyle(.secondaryText)
                 }

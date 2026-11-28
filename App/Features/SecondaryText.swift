@@ -17,4 +17,30 @@ extension ShapeStyle where Self == Color {
             }
         )
     }
+
+    /// Destructive button text (*Unlink*, *Cancel Sync*) that meets 4.5:1 in light and dark mode; the system red
+    /// falls short on grouped backgrounds.
+    static var accessibleDestructive: Color {
+        Color(
+            UIColor { traits in
+                traits.userInterfaceStyle == .dark
+                    ? UIColor(red: 1.00, green: 0.45, blue: 0.42, alpha: 1)
+                    : UIColor(red: 0.75, green: 0.10, blue: 0.10, alpha: 1)
+            }
+        )
+    }
+}
+
+/// A label and value row whose value uses the accessible secondary style (the system's falls just short).
+struct InfoRow: View {
+    let label: LocalizedStringKey
+    let value: String
+
+    var body: some View {
+        LabeledContent {
+            Text(value).foregroundStyle(.secondaryText)
+        } label: {
+            Text(label)
+        }
+    }
 }
