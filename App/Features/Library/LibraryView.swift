@@ -164,16 +164,16 @@ extension LibraryView {
     }
 }
 
-/// Centres an empty state in the space it has, and scrolls when larger Dynamic Type makes it taller than that,
-/// so the text is never clipped (the search bar leaves less room).
+/// Shows an empty state centred as it is, or in a scroll view when larger Dynamic Type makes it taller than the
+/// space it has (the search bar leaves less room), so the text is never clipped. `ViewThatFits` rather than a
+/// `GeometryReader`-sized scroll view, whose height feeds back through the collapsing search bar.
 private struct ScrollableUnavailableView<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        GeometryReader { proxy in
-            ScrollView {
-                content.frame(maxWidth: .infinity, minHeight: proxy.size.height)
-            }
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView { content }
         }
     }
 }

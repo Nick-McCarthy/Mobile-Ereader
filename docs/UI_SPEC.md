@@ -13,7 +13,7 @@ App root: `TabView` — **Library** · **Collections** · **Settings**.
   - Long explanations go in a footnote row, not a section footer, which the audit reports as not fully scaling.
   - Section headers use `.secondaryText`.
   - Hide an action that can't be used rather than disabling it, since disabled text fails the contrast check.
-- **Empty states** (`ContentUnavailableView`) sit in a scroll view sized to the screen, so they stay centred but scroll instead of clipping at large Dynamic Type sizes.
+- **Empty states** (`ContentUnavailableView`) are shown centred, or in a scroll view when large Dynamic Type makes them taller than the screen (`ViewThatFits`), so they never clip. Don't size a scroll view's content from a `GeometryReader` under a collapsing search bar: the height feeds back and the layout can loop.
 - **Accessibility audit:** `auditAccessibility(_:)` (`UITests/AuditSupport.swift`) runs `performAccessibilityAudit()` and reports every issue in one failure, on one line (xcbeautify shows only a failure's first line), each naming its element. It covers the Library, empty and as a grid and a list of books (`AccessibilityAuditTests`), Settings, and the source detail screen (`BookSourcesTests`). Add new screens. The only exclusion is UIKit's search-field clear button (×), whose 20 pt hit area the app can't change.
 - Decorative images (covers beside a title) are hidden from VoiceOver; progress indicators have a label.
 
