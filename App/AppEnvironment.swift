@@ -98,8 +98,10 @@ struct AppEnvironment: Sendable {
                 caches: root.appendingPathComponent("Caches", isDirectory: true)
             )
             let seed = arguments.contains("-UITestSeedBooks") ? uiTestBooks : []
-            // Each run starts in the default view mode, whatever an earlier test chose.
-            UserDefaults.standard.removeObject(forKey: LibraryViewMode.storageKey)
+            // Each run starts in the default view mode and sort, whatever an earlier test chose.
+            for key in [LibraryViewMode.storageKey, LibrarySortMenu.sortKey, LibrarySortMenu.reversedKey] {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
             var folder: URL?
             if arguments.contains("-UITestLinkedFolder") {
                 let books = root.appendingPathComponent("UITest Books", isDirectory: true)

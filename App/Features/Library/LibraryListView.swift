@@ -60,5 +60,6 @@ private struct LibraryListRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibility.label)
         .accessibilityValue(accessibility.value)
+        .accessibilityIdentifier("library-book")
     }
 }
