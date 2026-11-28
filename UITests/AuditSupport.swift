@@ -13,7 +13,8 @@ extension XCTestCase {
             return true
         }
         if !issues.isEmpty {
-            let report = "\(issues.count) accessibility issue(s):\n" + issues.joined(separator: "\n")
+            // One line: xcbeautify shows only the first line of a failure message.
+            let report = "\(issues.count) accessibility issue(s): " + issues.joined(separator: " | ")
             XCTFail(report, file: file, line: line)
         }
     }
